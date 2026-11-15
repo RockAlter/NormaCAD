@@ -1,0 +1,23 @@
+{
+  "name": "norma",
+  "productName": "Norma",
+  "version": "0.1.0",
+  "description": "Viewer and editor for CATPart, STEP, IGES and mesh CAD files",
+  "private": true,
+  "type": "module",
+  "main": "electron-main.js",
+  "scripts": {
+    "start": "node server.js",
+    "app": "electron .",
+    "test": "node test/catpart.test.mjs",
+    "build": "electron-packager . \"Norma\" --platform=win32 --arch=x64 --out=dist --overwrite --asar --ignore=\"^/(samples|test|dist|\\.claude)($|/)\""
+  },
+  "dependencies": {
+    "occt-import-js": "0.0.23",
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "^18.4.4",
+    "electron": "^33.4.11"
+  }
+}

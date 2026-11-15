@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Norma</title>
+  <link rel="stylesheet" href="/src/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "/node_modules/three/build/three.module.js",
+        "three/addons/": "/node_modules/three/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <header class="toolbar">
+    <div class="brand">Norma</div>
+
+    <div class="seg mode-switch" role="group">
+      <button id="mode-view" class="on" data-i18n="viewMode" data-i18n-title="viewMode.t"></button>
+      <button id="mode-edit" data-i18n="editMode" data-i18n-title="editMode.t"></button>
+    </div>
+
+    <div class="group">
+      <button id="btn-open" class="primary" data-i18n="open" data-i18n-title="open.t"></button>
+      <div class="menu-wrap" id="samples-wrap" hidden>
+        <button id="btn-samples" data-i18n="samples" data-i18n-title="samples.t"></button>
+        <div class="menu" id="samples-menu" hidden></div>
+      </div>
+    </div>
+
+    <div class="group" role="group">
+      <button id="btn-fit" data-i18n="fit" data-i18n-title="fit.t"></button>
+      <button data-view="iso" data-i18n="iso" title="1"></button>
+      <button data-view="front" data-i18n="front" title="2"></button>
+      <button data-view="back" data-i18n="back" title="3"></button>
+      <button data-view="left" data-i18n="left" title="4"></button>
+      <button data-view="right" data-i18n="right" title="5"></button>
+      <button data-view="top" data-i18n="top" title="6"></button>
+      <button data-view="bottom" data-i18n="bottom" title="7"></button>
+    </div>
+
+    <div class="group">
+      <label class="field">
+        <span data-i18n="display"></span>
+        <select id="sel-mode">
+          <option value="shaded-edges" data-i18n="mode.shaded-edges"></option>
+          <option value="shaded" data-i18n="mode.shaded"></option>
+          <option value="hidden-line" data-i18n="mode.hidden-line"></option>
+          <option value="wireframe" data-i18n="mode.wireframe"></option>
+          <option value="xray" data-i18n="mode.xray"></option>
+          <option value="triangles" data-i18n="mode.triangles"></option>
+        </select>
+      </label>
+      <button id="btn-proj" data-i18n-title="proj.t"></button>
+    </div>
+
+    <div class="group">
+      <button id="btn-section" class="toggle" data-i18n="section" data-i18n-title="section.t"></button>
+      <button id="btn-measure" class="toggle" data-i18n="measure" data-i18n-title="measure.t"></button>
+      <button id="btn-shot" data-i18n="screenshot" data-i18n-title="shot.t"></button>
+    </div>
+
+    <div class="group push">
+      <select id="sel-lang" data-i18n-aria="language" data-i18n-title="language">
+        <option value="en">English</option>
+        <option value="ja">日本語</option>
+        <option value="zh">中文</option>
+      </select>
+    </div>
+  </header>
+
+  <div id="editbar" class="toolbar editbar" hidden>
+    <div class="brand edit-tag" data-i18n="e.title"></div>
+
+    <div class="group">
+      <span class="muted" data-i18n="target"></span>
+      <div class="seg" id="edit-target">
+        <button data-target="face" class="on" data-i18n="tFace"></button>
+        <button data-target="body" data-i18n="tBody"></button>
+      </div>
+    </div>
+
+    <div class="group" id="edit-gizmo">
+      <button class="toggle" data-gizmo="translate" data-i18n="move" data-i18n-title="move.t"></button>
+      <button class="toggle" data-gizmo="rotate" data-i18n="rotate" data-i18n-title="rotate.t"></button>
+      <button class="toggle" data-gizmo="scale" data-i18n="scale" data-i18n-title="scale.t"></button>
+      <button id="edit-reset" data-i18n="reset" data-i18n-title="reset.t"></button>
+    </div>
+
+    <div class="group">
+      <input id="edit-color" type="color" value="#e8590c" data-i18n-aria="colour" data-i18n-title="colour">
+      <button id="edit-paint" data-i18n="paint" data-i18n-title="paint.t"></button>
+      <button id="edit-delete" data-i18n="delete" data-i18n-title="delete.t"></button>
+    </div>
+
+    <div class="group">
+      <button id="edit-undo" data-i18n="undo" data-i18n-title="undo.t" disabled></button>
+      <button id="edit-redo" data-i18n="redo" data-i18n-title="redo.t" disabled></button>
+    </div>
+
+    <div class="group">
+      <div class="menu-wrap">
+        <button id="btn-export" data-i18n="export" data-i18n-title="export.t"></button>
+        <div class="menu" id="export-menu" hidden>
+          <button data-export="stl" data-i18n="exportStl"></button>
+          <button data-export="glb" data-i18n="exportGlb"></button>
+          <button data-export="obj" data-i18n="exportObj"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <main>
+    <aside id="left">
+      <h2 data-i18n="models"></h2>
+      <div id="model-list" class="list"></div>
+      <p id="model-empty" class="muted" data-i18n="noModels"></p>
+    </aside>
+
+    <section id="viewport">
+      <canvas id="canvas"></canvas>
+      <div id="labels"></div>
+
+      <div id="drop-hint">
+        <div class="drop-card">
+          <div class="drop-title" data-i18n="dropTitle"></div>
+          <div class="drop-sub" data-i18n="dropSub"></div>
+        </div>
+      </div>
+
+      <div id="section-panel" class="float-panel" hidden>
+        <div class="row">
+          <strong data-i18n="section"></strong>
+          <div class="seg" id="section-axis">
+            <button data-axis="x" class="on">X</button>
+            <button data-axis="y">Y</button>
+            <button data-axis="z">Z</button>
+          </div>
+          <button id="section-flip" data-i18n="flip" data-i18n-title="flip.t"></button>
+        </div>
+        <div class="row">
+          <input id="section-pos" type="range" min="0" max="1000" value="500" data-i18n-aria="section">
+          <output id="section-val"></output>
+        </div>
+      </div>
+
+      <div id="measure-panel" class="float-panel" hidden>
+        <div class="row">
+          <strong data-i18n="measure"></strong>
+          <span id="measure-hint" class="muted"></span>
+          <button id="measure-clear" data-i18n="clear"></button>
+        </div>
+      </div>
+
+      <div id="busy" hidden><div class="spinner"></div><span id="busy-text"></span></div>
+      <div id="toasts"></div>
+    </section>
+
+    <aside id="right">
+      <h2 data-i18n="properties"></h2>
+      <div id="props"></div>
+    </aside>
+  </main>
+
+  <footer class="status">
+    <span id="status-left" data-i18n="statusHint"></span>
+    <span id="status-right"></span>
+  </footer>
+
+  <input id="file-input" type="file" multiple hidden
+         accept=".catpart,.cgr,.step,.stp,.iges,.igs,.brep,.brp,.stl,.obj,.ply,.3mf,.gltf,.glb">
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

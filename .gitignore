@@ -1,0 +1,5 @@
+node_modules/
+dist/
+# Local CAD files used for testing are not part of the project
+samples/
+.claude/
