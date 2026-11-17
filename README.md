@@ -1,6 +1,6 @@
 # Norma
 
-A desktop viewer and light editor for CAD files, including CATIA V5 `.CATPart` files, without needing CATIA.
+A desktop CAD viewer and modeller that also opens CATIA V5 `.CATPart` files, without needing CATIA.
 
 *Norma* is Latin for a draftsman's square — the root of the word "normal".
 
@@ -15,6 +15,7 @@ The interface is available in English, 日本語 and 中文.
 | IGES | `.iges`, `.igs` | Exact geometry, tessellated by OpenCascade |
 | OpenCascade BREP | `.brep`, `.brp` | Exact geometry, tessellated by OpenCascade |
 | Meshes | `.stl`, `.obj`, `.ply`, `.3mf`, `.gltf`, `.glb` | Triangle mesh |
+| Norma project | `.norma` | Parts with their full feature history |
 
 Other proprietary formats (SolidWorks, NX, Creo, Inventor, Parasolid, JT, …) are not supported; export them to STEP first.
 
@@ -32,16 +33,33 @@ The app always starts in View mode, where nothing can change a model.
 
 ## Edit mode
 
-Switch with the **View | Edit** control. Edit mode adds its own toolbar:
+Switch with the **View | Edit** control. Edit mode adds its own toolbar with two kinds of editing.
 
-- Select by face or by body
-- Move, rotate and scale with a drag handle or exact values
-- Recolour a face or a body
-- Delete a face or a body
-- Undo and redo for every edit
-- Export the result as STL, GLB or OBJ
+### Modelling (parts)
 
-Edits apply to the displayed mesh only. This is not parametric CAD editing, the original file is never modified, and Norma cannot write `.CATPart` files.
+A **part** is a solid built from an ordered list of features, shown as a tree under the part in the model list. Click a feature to change its values; the part rebuilds from that point on. Features can be switched off, reordered or deleted, and every change can be undone.
+
+- **Part ▾** — new empty part; make the active model editable; combine with another model (add, subtract, intersect); save the project as `.norma`
+- **Create ▾** — box, cylinder, sphere, cone, torus; extrude a sketch (pad or pocket, reverse, symmetric, through all); revolve a sketch
+- **Modify ▾** — hole (with optional counterbore), fillet and chamfer on picked edges, shell with picked faces open, mirror, linear and polar pattern of an earlier feature, cut by plane, move / rotate / scale
+- **Sketches** — on the XY, XZ or YZ plane (with offset) or on any flat face you click. Draw rectangles and circles by dragging and polylines by clicking on a snapping grid, or add rectangles, circles, polygons, slots and polylines by numbers. A shape drawn inside another becomes a hole.
+- **Properties** — volume, surface area, centre of mass, and mass from a density you set; type, area and normal of a clicked face
+- **Export** — STEP (exact) for the active part; STL, GLB or OBJ for everything visible
+
+Parts come in two kinds:
+
+| Part made from | Body | Available |
+|---|---|---|
+| Nothing (new part), or a STEP file | Exact solid (B-Rep, OpenCascade) | Everything, including STEP export |
+| A CATPart, STL, OBJ or other mesh | Mesh solid (Manifold) | Everything except fillet, chamfer and shell; no STEP export |
+
+Fillets, chamfers and shells reference edges and faces by position and direction, so they follow the geometry when earlier features change size. If a reference becomes ambiguous the feature reports an error (⚠) instead of guessing; edit it and pick again.
+
+The original files are never modified.
+
+### Plain models
+
+For models that are not parts: select a face or body, move / rotate / scale with a drag handle or exact values, recolour or delete faces and bodies, then export as STL, GLB or OBJ.
 
 ## How CATPart files are read
 
@@ -81,10 +99,20 @@ To package the Windows app into `dist/`:
 npm run build
 ```
 
-To check the CATPart reader against your own files:
+Tests:
+
+```bash
+npm test
+```
+
+That runs the CATPart reader check (on files in `samples/`) and the modelling-kernel tests. To check the reader, or mesh-part editing, against your own file:
 
 ```bash
 node test/catpart.test.mjs path/to/part.CATPart
+```
+
+```bash
+node test/mesh2solid.test.mjs path/to/part.CATPart
 ```
 
 ## Project layout
@@ -93,10 +121,14 @@ node test/catpart.test.mjs path/to/part.CATPart
 |---|---|
 | `index.html`, `src/style.css` | Page and styles |
 | `src/main.js` | Viewer, edit mode, UI wiring |
-| `src/i18n.js` | English, Japanese and Chinese strings |
+| `src/i18n.js`, `src/i18n-cad.js` | English, Japanese and Chinese strings |
 | `src/meshkit.js` | Mesh, material and edge helpers |
 | `src/loaders/catpart.js` | CATIA V5 reader |
 | `src/loaders/index.js` | Format dispatch (OpenCascade and three.js loaders) |
+| `src/cad/build.js` | Feature-history evaluation (runs in the kernel worker and in Node tests) |
+| `src/cad/worker.js`, `src/cad/kernel.js` | Modelling kernel in a Web Worker, and its client |
+| `src/cad/partui.js`, `src/cad/features.js` | Feature tree, dialogs, picking and sketcher |
+| `src/cad/meshsolid.js` | Turning closed meshes into mesh solids |
 | `server.js` | Small static server, no dependencies |
 | `electron-main.js` | Desktop shell |
 
@@ -104,6 +136,8 @@ node test/catpart.test.mjs path/to/part.CATPart
 
 - [three.js](https://threejs.org) (MIT) — rendering, mesh loaders and exporters
 - [occt-import-js](https://github.com/kovacsv/occt-import-js) (LGPL-2.1), built on OpenCascade — STEP, IGES and BREP import
+- [replicad](https://replicad.xyz) (MIT) with [replicad-opencascadejs](https://github.com/sgenoud/replicad) (LGPL-2.1, OpenCascade) — solid modelling
+- [Manifold](https://github.com/elalish/manifold) (Apache-2.0) — booleans on mesh solids
 - [Electron](https://www.electronjs.org) (MIT) — desktop packaging
 
 ## Notice

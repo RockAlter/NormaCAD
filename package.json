@@ -1,19 +1,22 @@
 {
   "name": "norma",
   "productName": "Norma",
-  "version": "0.1.0",
-  "description": "Viewer and editor for CATPart, STEP, IGES and mesh CAD files",
+  "version": "0.2.0",
+  "description": "CAD viewer and modeller for CATPart, STEP, IGES and mesh files",
   "private": true,
   "type": "module",
   "main": "electron-main.js",
   "scripts": {
     "start": "node server.js",
     "app": "electron .",
-    "test": "node test/catpart.test.mjs",
-    "build": "electron-packager . \"Norma\" --platform=win32 --arch=x64 --out=dist --overwrite --asar --ignore=\"^/(samples|test|dist|\\.claude)($|/)\""
+    "test": "node test/features.test.mjs && node test/catpart.test.mjs && node test/mesh2solid.test.mjs",
+    "build": "electron-packager . \"Norma\" --platform=win32 --arch=x64 --out=dist --overwrite --asar --ignore=\"^/(samples|test|dist|\\.claude)($|/)\" --ignore=\"\\.(map|d\\.ts|md)$\" --ignore=\"^/node_modules/replicad-opencascadejs/dist/replicad_multi\" --ignore=\"^/node_modules/(@gltf-transform|@jscadui|@jridgewell|commander|convert-source-map|fast-xml-parser|fflate|magic-string)($|/)\""
   },
   "dependencies": {
+    "manifold-3d": "3.5.4",
     "occt-import-js": "0.0.23",
+    "replicad": "1.1.0",
+    "replicad-opencascadejs": "1.1.0",
     "three": "0.170.0"
   },
   "devDependencies": {

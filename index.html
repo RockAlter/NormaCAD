@@ -76,6 +76,27 @@
     <div class="brand edit-tag" data-i18n="e.title"></div>
 
     <div class="group">
+      <div class="menu-wrap">
+        <button id="btn-part" data-i18n="m.part"></button>
+        <div class="menu" id="menu-part" hidden>
+          <button id="part-new" data-i18n="part.new"></button>
+          <button id="part-editable" data-i18n="part.editable"></button>
+          <button id="part-combine" data-i18n="part.combine"></button>
+          <hr>
+          <button id="part-save" data-i18n="part.save"></button>
+        </div>
+      </div>
+      <div class="menu-wrap">
+        <button id="btn-create" class="primary" data-i18n="m.create"></button>
+        <div class="menu" id="menu-create" hidden></div>
+      </div>
+      <div class="menu-wrap">
+        <button id="btn-modify" data-i18n="m.modify"></button>
+        <div class="menu" id="menu-modify" hidden></div>
+      </div>
+    </div>
+
+    <div class="group">
       <span class="muted" data-i18n="target"></span>
       <div class="seg" id="edit-target">
         <button data-target="face" class="on" data-i18n="tFace"></button>
@@ -105,6 +126,7 @@
       <div class="menu-wrap">
         <button id="btn-export" data-i18n="export" data-i18n-title="export.t"></button>
         <div class="menu" id="export-menu" hidden>
+          <button data-export="step" data-i18n="exportStep"></button>
           <button data-export="stl" data-i18n="exportStl"></button>
           <button data-export="glb" data-i18n="exportGlb"></button>
           <button data-export="obj" data-i18n="exportObj"></button>
@@ -160,6 +182,7 @@
     </section>
 
     <aside id="right">
+      <div id="feature-panel" class="feature-panel" hidden></div>
       <h2 data-i18n="properties"></h2>
       <div id="props"></div>
     </aside>
@@ -171,7 +194,7 @@
   </footer>
 
   <input id="file-input" type="file" multiple hidden
-         accept=".catpart,.cgr,.step,.stp,.iges,.igs,.brep,.brp,.stl,.obj,.ply,.3mf,.gltf,.glb">
+         accept=".norma,.catpart,.cgr,.step,.stp,.iges,.igs,.brep,.brp,.stl,.obj,.ply,.3mf,.gltf,.glb">
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

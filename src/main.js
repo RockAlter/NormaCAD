@@ -4,6 +4,7 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { loadModel, extensionOf } from './loaders/index.js';
 import { partMaterial, addComputedEdges, faceOutlineLines, DEFAULT_COLOR } from './meshkit.js';
 import { t, errorText, applyStatic, setLang, getLang, APP_NAME } from './i18n.js';
+import * as Parts from './cad/partui.js';
 
 const $ = (id) => document.getElementById(id);
 const viewport = $('viewport');
@@ -140,6 +141,20 @@ const VIEWS = {
   top: [0, -0.0005, 1],
   bottom: [0, 0.0005, -1],
 };
+
+// Turn the camera to look along -dir (dir points from the target to the camera).
+function lookAlong(dir, up = [0, 0, 1]) {
+  const d = new THREE.Vector3(...dir).normalize();
+  const dist = camera.position.distanceTo(controls.target) || 100;
+  for (const cam of [persp, ortho]) {
+    cam.position.copy(controls.target).addScaledVector(d, dist);
+    cam.up.set(...(Array.isArray(up) ? up : [up.x, up.y, up.z]));
+    cam.lookAt(controls.target);
+  }
+  updateProjection();
+  controls.update();
+  requestRender();
+}
 
 function fit(dirArray = null, box = sceneBox()) {
   if (box.isEmpty()) return;
@@ -383,6 +398,18 @@ function addModel(name, bytes, result) {
   return model;
 }
 
+// Parts (modelling) are created by partui and may start empty.
+function registerModel(model) {
+  modelRoot.add(model.object);
+  refreshModel(model);
+  models.push(model);
+  activeModel = model;
+  syncGizmo();
+  refreshModelList();
+  showProps();
+  return model;
+}
+
 function disposeObject(object) {
   object.traverse((o) => {
     if (o.geometry) o.geometry.dispose();
@@ -392,6 +419,7 @@ function disposeObject(object) {
 
 function removeModel(model) {
   if (selection && selection.model === model) clearSelection();
+  if (Parts.isPart(model)) Parts.dropPart(model);
   modelRoot.remove(model.object);
   disposeObject(model.object);
   models.splice(models.indexOf(model), 1);
@@ -452,6 +480,7 @@ function refreshModelList() {
     row.addEventListener('click', () => setActive(m));
     row.addEventListener('dblclick', () => fit(null, m.box));
     list.append(row);
+    if (Parts.isPart(m)) list.append(Parts.renderTree(m));
   }
   $('model-empty').hidden = models.length > 0;
   $('drop-hint').style.display = models.length ? 'none' : '';
@@ -512,6 +541,10 @@ function showProps() {
     p.className = 'muted';
     p.textContent = t('propsEmpty');
     el.append(p);
+    return;
+  }
+  if (Parts.isPart(m)) {
+    Parts.partProps(m, el, { heading, dl, fmt });
     return;
   }
   const size = m.box.getSize(new THREE.Vector3());
@@ -750,8 +783,18 @@ gizmo.addEventListener('dragging-changed', (e) => {
 
 // ---- colour ---------------------------------------------------------------------------------
 
+// Plain-model editing tools do not apply to parts (they change through features).
+function blockedForPart(model) {
+  if (Parts.isPart(model)) {
+    toast(t('k.partTools'));
+    return true;
+  }
+  return false;
+}
+
 function paintSelection(hex) {
   if (!selection) { toast(t('e.needSel')); return; }
+  if (blockedForPart(selection.model)) return;
   const { mesh, face, model } = selection;
   const g = mesh.geometry;
   const before = { attr: g.attributes.color ? g.attributes.color.clone() : null, material: mesh.material };
@@ -795,6 +838,7 @@ function swapEdges(mesh, lines) {
 
 function deleteSelection() {
   if (!selection) { toast(t('e.needSel')); return; }
+  if (blockedForPart(selection.model)) return;
   const { mesh, model, faceIndex, face } = selection;
   clearSelection();
 
@@ -858,6 +902,11 @@ function download(data, filename, type) {
 }
 
 async function exportAs(kind) {
+  if (kind === 'step') {
+    if (Parts.isPart(activeModel)) Parts.exportPart(activeModel, 'step');
+    else toast(t('k.needPart'));
+    return;
+  }
   // Flatten to plain meshes in world space: no edge overlays, no highlight, edits baked in.
   const root = new THREE.Group();
   for (const m of models) {
@@ -915,12 +964,14 @@ function setEditMode(on) {
   $('editbar').hidden = !on;
   document.body.classList.toggle('editing', on);
   if (!on) {
+    Parts.closeDialog(true);
     edit.gizmo = null;
     $('export-menu').hidden = true;
     // A body selection only exists in edit mode.
     if (selection && selection.faceIndex < 0 && selection.mesh.userData.faces) clearSelection();
   }
   syncGizmo();
+  refreshModelList(); // feature-tree controls depend on the mode
   showProps();
 }
 
@@ -1047,6 +1098,7 @@ canvas.addEventListener('pointerup', (e) => {
   const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
   down = null;
   if (moved > 4) return;
+  if (Parts.dialogOpen()) return; // the feature dialog owns clicks in the viewport
   const hit = pick(e);
   if (measure.on) {
     if (hit) measureClick(hit, e);
@@ -1076,8 +1128,20 @@ async function openBuffers(items) {
     await nextPaint();
     try {
       const buffer = await getBuffer();
+      const ext = extensionOf(name);
+      if (ext === 'norma') {
+        busy(t('k.loading'));
+        const made = await Parts.openProject(name, buffer);
+        loaded += made.length;
+        continue;
+      }
       const result = await loadModel(name, buffer);
-      addModel(name, buffer.byteLength, result);
+      const model = addModel(name, buffer.byteLength, result);
+      // STEP files keep their bytes so they can be made editable as exact solids.
+      if (ext === 'step' || ext === 'stp') {
+        model.sourceBytes = buffer;
+        model.sourceKind = 'step';
+      }
       loaded++;
     } catch (err) {
       console.error(err);
@@ -1192,12 +1256,14 @@ for (const b of $('edit-target').querySelectorAll('button')) {
 for (const b of $('edit-gizmo').querySelectorAll('[data-gizmo]')) {
   b.addEventListener('click', () => {
     if (!activeModel) { toast(t('e.needModel')); return; }
+    if (blockedForPart(activeModel)) return;
     edit.gizmo = edit.gizmo === b.dataset.gizmo ? null : b.dataset.gizmo;
     syncGizmo();
   });
 }
 $('edit-reset').addEventListener('click', () => {
   if (!activeModel) { toast(t('e.needModel')); return; }
+  if (blockedForPart(activeModel)) return;
   const m = activeModel;
   transformModel(m, () => restore(m.object, m.object.userData.home));
 });
@@ -1217,6 +1283,7 @@ function refreshTexts() {
   document.title = APP_NAME;
   updateProjLabel();
   setMeasureHint(...measure.hint);
+  Parts.refreshTexts();
   refreshModelList();
   showProps();
 }
@@ -1228,12 +1295,14 @@ window.addEventListener('keydown', (e) => {
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
   const k = e.key.toLowerCase();
   if (e.ctrlKey || e.metaKey) {
-    if (!edit.on) return;
+    if (!edit.on || Parts.dialogOpen()) return;
     if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
     else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
     return;
   }
   if (e.altKey) return;
+  if (k === 'escape' && Parts.escape()) return;
+  if (k === 'enter' && Parts.finishPolyline()) return;
   const viewKeys = { 1: 'iso', 2: 'front', 3: 'back', 4: 'left', 5: 'right', 6: 'top', 7: 'bottom' };
   if (viewKeys[k]) fit(VIEWS[viewKeys[k]]);
   else if (k === 'f') fit();
@@ -1251,6 +1320,44 @@ window.addEventListener('keydown', (e) => {
 });
 
 // =================================================================================================
+// Modelling
+// =================================================================================================
+
+function rayFromEvent(e) {
+  return raycasterFromEvent(e).ray;
+}
+
+function raycasterFromEvent(e) {
+  const rect = canvas.getBoundingClientRect();
+  const r = new THREE.Raycaster();
+  r.setFromCamera(new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1), camera);
+  return r;
+}
+
+// Size of one screen pixel in world units at an object's position.
+function worldPerPixel(object) {
+  const h = viewport.clientHeight || 1;
+  if (camera === ortho) return (ortho.top - ortho.bottom) / ortho.zoom / h;
+  const box = new THREE.Box3().setFromObject(object);
+  const p = box.isEmpty() ? controls.target : box.getCenter(new THREE.Vector3());
+  const dist = camera.position.distanceTo(p);
+  return (2 * dist * Math.tan(THREE.MathUtils.degToRad(FOV / 2))) / h;
+}
+
+Parts.initParts({
+  scene, viewport, controls, models,
+  nextModelId: () => nextId++,
+  registerModel, setActive, refreshModel, applyDisplayMode, refreshModelList, showProps, requestRender,
+  getActive: () => activeModel,
+  getSelection: () => selection,
+  clearSelection, toast, busy, pushCommand, fit, lookAlong, download,
+  isEditing: () => edit.on,
+  setCursor: (c) => { canvas.style.cursor = c || (measure.on ? 'crosshair' : ''); },
+  setStatus: (s) => { $('status-left').textContent = s || t('statusHint'); },
+  rayFromEvent, raycasterFromEvent, worldPerPixel,
+});
+
+// =================================================================================================
 // Start
 // =================================================================================================
 
@@ -1263,7 +1370,7 @@ if (startSample) openSample(startSample);
 
 // Small hook for automated checks.
 window.__viewer = {
-  models, fit, edit, extensionOf, setEditMode, paintSelection, deleteSelection, undo, redo, select, pick,
+  models, fit, edit, extensionOf, setEditMode, paintSelection, deleteSelection, undo, redo, select, pick, Parts,
   get camera() { return camera; },
   get selection() { return selection; },
 };

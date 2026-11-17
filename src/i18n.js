@@ -1,6 +1,8 @@
 // UI translations: English, Japanese, Simplified Chinese.
 // Static markup uses data-i18n (text), data-i18n-title (tooltip) and data-i18n-aria (aria-label).
 
+import * as cad from './i18n-cad.js';
+
 export const APP_NAME = 'Norma';
 export const LANGS = { en: 'English', ja: '日本語', zh: '中文' };
 
@@ -62,7 +64,7 @@ const en = {
   delete: 'Delete', 'delete.t': 'Delete the selected face or body (Del)',
   undo: 'Undo', redo: 'Redo', 'undo.t': 'Undo (Ctrl+Z)', 'redo.t': 'Redo (Ctrl+Y)',
   export: 'Export ▾', 'export.t': 'Save the visible models, including edits',
-  exportStl: 'STL (binary)', exportGlb: 'glTF binary (.glb)', exportObj: 'Wavefront OBJ',
+  exportStl: 'STL (binary)', saveProjectT: 'Save project', exportGlb: 'glTF binary (.glb)', exportObj: 'Wavefront OBJ',
   transform: 'Transform', offX: 'Offset X', offY: 'Offset Y', offZ: 'Offset Z',
   rotX: 'Rotation X', rotY: 'Rotation Y', rotZ: 'Rotation Z', scaleF: 'Scale factor',
   'e.needSel': 'Click a face or body first.',
@@ -205,7 +207,7 @@ const zh = {
   'e.title': '编辑',
 };
 
-const DICT = { en, ja, zh };
+const DICT = { en: { ...en, ...cad.en }, ja: { ...ja, ...cad.ja }, zh: { ...zh, ...cad.zh } };
 const HTML_LANG = { en: 'en', ja: 'ja', zh: 'zh-Hans' };
 let lang = 'en';
 
@@ -221,7 +223,7 @@ function detect() {
 }
 
 export function t(key, vars) {
-  let s = DICT[lang][key] ?? en[key] ?? key;
+  let s = DICT[lang][key] ?? DICT.en[key] ?? key;
   if (vars) for (const k of Object.keys(vars)) s = s.replaceAll(`{${k}}`, vars[k]);
   return s;
 }
