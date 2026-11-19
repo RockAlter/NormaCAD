@@ -1,18 +1,24 @@
 // Feature catalogue: defaults, form fields and short summaries. Shared by the UI only.
 
-export const CREATE = ['box', 'cylinder', 'sphere', 'cone', 'torus', '-', 'extrude', 'revolve'];
-export const MODIFY = ['hole', 'fillet', 'chamfer', 'shell', '-', 'mirror', 'linearPattern', 'polarPattern', 'cutPlane', 'transform'];
+export const CREATE = ['box', 'cylinder', 'sphere', 'cone', 'torus', '-', 'extrude', 'revolve', 'loft', 'sweep', '-', 'gear'];
+export const MODIFY = ['hole', 'fillet', 'chamfer', 'shell', 'draft', '-', 'mirror', 'linearPattern', 'polarPattern', 'cutPlane', 'transform'];
 
 // Features whose result is a tool body (they can be repeated by a pattern).
-export const TOOL_FEATURES = new Set(['box', 'cylinder', 'sphere', 'cone', 'torus', 'extrude', 'revolve', 'hole']);
+export const TOOL_FEATURES = new Set(['box', 'cylinder', 'sphere', 'cone', 'torus', 'extrude', 'revolve', 'loft', 'sweep', 'gear', 'hole']);
 // Features that only work on exact (B-Rep) bodies.
-export const EXACT_ONLY = new Set(['fillet', 'chamfer', 'shell']);
+export const EXACT_ONLY = new Set(['fillet', 'chamfer', 'shell', 'draft']);
 
 const OPS = [['add', 'op.add'], ['cut', 'op.cut'], ['intersect', 'op.intersect']];
 const AXES = [['X', 'X'], ['Y', 'Y'], ['Z', 'Z']];
 const PLANES = [['XY', 'XY'], ['XZ', 'XZ'], ['YZ', 'YZ']];
 
-// Field kinds: num, vec3, select, check, edges, faces, point, sketch, source
+// Field kinds: num, vec3, select, check, text, edges, faces, point, sketch, source.
+// An optional fourth entry is a condition: the field shows only when it returns true.
+const isHelix = (d) => d.path !== 'polyline';
+const endIs = (...types) => (d) => types.includes(d.endType);
+
+// Fields whose label differs from the shared one.
+export const LABELS = { 'gear.thickness': 'p.faceWidth', 'draft.faces': 'p.draftFaces', 'draft.angle': 'p.draftAngle' };
 export const FIELDS = {
   import: [['op', 'select', OPS]],
   box: [['op', 'select', OPS], ['pos', 'vec3'], ['w', 'num'], ['d', 'num'], ['h', 'num']],
@@ -27,7 +33,17 @@ export const FIELDS = {
   chamfer: [['edges', 'edges'], ['distance', 'num']],
   shell: [['faces', 'faces'], ['thickness', 'num']],
   mirror: [['plane', 'select', PLANES], ['origin', 'vec3'], ['keep', 'check']],
-  linearPattern: [['of', 'source'], ['direction', 'select', AXES], ['spacing', 'num'], ['count', 'num']],
+  loft: [['op', 'select', OPS], ['sketch', 'sketch'], ['distance', 'num'],
+    ['endType', 'select', [['rect', 'sk.rect'], ['circle', 'sk.circle'], ['polygon', 'sk.polygon']]],
+    ['endW', 'num', null, endIs('rect')], ['endH', 'num', null, endIs('rect')], ['endR', 'num', null, endIs('circle', 'polygon')], ['endN', 'num', null, endIs('polygon')],
+    ['endU', 'num'], ['endV', 'num'], ['ruled', 'check']],
+  sweep: [['op', 'select', OPS], ['profile', 'select', [['circle', 'sk.circle'], ['rect', 'sk.rect']]], ['pw', 'num'], ['ph', 'num', null, (d) => d.profile === 'rect'],
+    ['path', 'select', [['helix', 'p.helix'], ['polyline', 'sk.polyline']]],
+    ['pos', 'vec3', null, isHelix], ['axis', 'select', AXES, isHelix], ['helixR', 'num', null, isHelix], ['pitch', 'num', null, isHelix], ['height', 'num', null, isHelix], ['lefthand', 'check', null, isHelix],
+    ['pts', 'text', null, (d) => !isHelix(d)]],
+  gear: [['op', 'select', OPS], ['pos', 'vec3'], ['axis', 'select', AXES], ['teeth', 'num'], ['module', 'num'], ['pressure', 'num'], ['thickness', 'num'], ['bore', 'num']],
+  draft: [['faces', 'faces'], ['angle', 'num'], ['plane', 'select', PLANES], ['offset', 'num']],
+  linearPattern: [['of', 'source'], ['direction', 'select', AXES], ['spacing', 'num'], ['count', 'num'], ['direction2', 'select', AXES], ['spacing2', 'num'], ['count2', 'num']],
   polarPattern: [['of', 'source'], ['axis', 'select', AXES], ['origin', 'vec3'], ['count', 'num'], ['angle', 'num']],
   cutPlane: [['plane', 'select', PLANES], ['offset', 'num'], ['keep', 'select', [['positive', 'p.keepPos'], ['negative', 'p.keepNeg']]]],
   transform: [['translate', 'vec3'], ['rotAxis', 'select', AXES], ['rotAngle', 'num'], ['rotOrigin', 'vec3'], ['scale', 'num']],
@@ -52,7 +68,11 @@ export function defaults(type, ctx) {
     case 'chamfer': return { edges: [], distance: s / 2 };
     case 'shell': return { faces: [], thickness: s / 5 };
     case 'mirror': return { plane: 'YZ', origin: [0, 0, 0], keep: true };
-    case 'linearPattern': return { of: ctx.lastTool, direction: 'X', spacing: s * 2, count: 3 };
+    case 'loft': return { op: 'add', distance: s * 10, endType: 'circle', endW: s * 5, endH: s * 5, endR: s * 3, endN: 6, endU: 0, endV: 0, ruled: false, sketch: { plane: 'XY', offset: empty ? 0 : round(ctx.max[2], s / 10), shapes: [{ type: 'rect', cx: 0, cy: 0, w: s * 10, h: s * 10, r: 0 }] } };
+    case 'sweep': return { op: 'add', profile: 'circle', pw: s, ph: s, path: 'helix', pos: empty ? [0, 0, 0] : c.slice(), axis: 'Z', helixR: s * 5, pitch: s * 2, height: s * 10, lefthand: false, pts: `0, 0, 0; 0, 0, ${s * 10}; ${s * 10}, 0, ${s * 10}` };
+    case 'gear': return { op: 'add', pos: empty ? [0, 0, 0] : c.slice(), axis: 'Z', teeth: 24, module: 2, pressure: 20, thickness: 10, bore: 10 };
+    case 'draft': return { faces: [], angle: 3, plane: 'XY', offset: round(ctx.min[2] || 0, s / 10) };
+    case 'linearPattern': return { of: ctx.lastTool, direction: 'X', spacing: s * 2, count: 3, direction2: 'Y', spacing2: s * 2, count2: 1 };
     case 'polarPattern': return { of: ctx.lastTool, axis: 'Z', origin: [0, 0, 0], count: 6, angle: 360 };
     case 'cutPlane': return { plane: 'XY', offset: round(c[2], s / 10), keep: 'negative' };
     case 'transform': return { translate: [0, 0, 0], rotAxis: 'Z', rotAngle: 0, rotOrigin: [0, 0, 0], scale: 1 };
@@ -94,12 +114,16 @@ export function summary(f, t) {
     case 'torus': return `${opName(f, t)} ${name} Ø${n(f.R * 2)}`;
     case 'extrude': return `${t(f.op === 'cut' ? 'f.pocket' : f.op === 'intersect' ? 'f.extrudeX' : 'f.pad')} ${f.through ? t('p.through') : n(f.distance) + ' mm'}`;
     case 'revolve': return `${t(f.op === 'cut' ? 'f.groove' : 'f.revolve')} ${n(f.angle)}°`;
+    case 'loft': return `${opName(f, t)} ${name} ${n(f.distance)} mm`;
+    case 'sweep': return `${opName(f, t)} ${name} ${t(f.path === 'polyline' ? 'sk.polyline' : 'p.helix')}`;
+    case 'gear': return `${opName(f, t)} ${name} z${n(f.teeth)} m${n(f.module)}`;
+    case 'draft': return `${name} ${n(f.angle)}° ×${(f.faces || []).length}`;
     case 'hole': return `${name} Ø${n(f.diameter)} ${f.through ? t('p.through') : n(f.depth) + ' mm'}`;
     case 'fillet': return `${name} R${n(f.radius)} ×${(f.edges || []).length}`;
     case 'chamfer': return `${name} ${n(f.distance)} ×${(f.edges || []).length}`;
     case 'shell': return `${name} ${n(f.thickness)} mm`;
     case 'mirror': return `${name} ${f.plane}`;
-    case 'linearPattern': return `${name} ×${f.count}`;
+    case 'linearPattern': return `${name} ×${f.count}${f.count2 > 1 ? '×' + f.count2 : ''}`;
     case 'polarPattern': return `${name} ×${f.count}`;
     case 'cutPlane': return `${name} ${f.plane} ${n(f.offset)}`;
     case 'transform': return name;

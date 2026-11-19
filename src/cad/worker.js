@@ -2,7 +2,7 @@
 import opencascade from '/node_modules/replicad-opencascadejs/dist/replicad_single.js';
 import Manifold from '/node_modules/manifold-3d/manifold.js';
 import * as R from '/node_modules/replicad/dist/replicad.js';
-import { setKernel, evaluate, describe, isMesh } from './build.js';
+import { setKernel, evaluate, describe, isMesh, drawingViews } from './build.js';
 import { weldMesh, meshToBody } from './meshsolid.js';
 
 const WASM = '/node_modules/replicad-opencascadejs/dist/replicad_single.wasm';
@@ -111,6 +111,13 @@ const handlers = {
     const blob = format === 'stl' ? p.shape.blobSTL({ binary: true }) : p.shape.blobSTEP();
     const buf = await blob.arrayBuffer();
     return { bytes: buf, __transfer: [buf] };
+  },
+
+  async drawing({ partId }) {
+    const p = parts.get(partId);
+    if (!p || !p.shape) throw Object.assign(new Error('no body'), { i18n: 'k.noBody' });
+    if (isMesh(p.shape)) throw Object.assign(new Error('mesh'), { i18n: 'k.drawMesh' });
+    return drawingViews(p.shape);
   },
 
   async dropPart({ partId }) {

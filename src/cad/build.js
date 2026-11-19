@@ -234,6 +234,73 @@ function sketchTool(f, current) {
   return drawing.sketchOnPlane(makePlane(def, start)).extrude(dist);
 }
 
+// Loft from a one-shape sketch to a second profile further along the sketch normal.
+function loftTool(f) {
+  const shapes = f.sketch?.shapes || [];
+  if (!shapes.length) throw kerr('k.emptySketch');
+  if (shapes.length > 1 || shapes[0].hole) throw kerr('k.oneProfile');
+  if (!f.distance) throw kerr('k.badSize');
+  const def = planeDef(f.sketch.plane);
+  const off = f.sketch.offset || 0;
+  const end = shapeDrawing({ type: f.endType, cx: f.endU || 0, cy: f.endV || 0, w: f.endW, h: f.endH, r: f.endR, n: f.endN });
+  const a = shapeDrawing(shapes[0]).sketchOnPlane(makePlane(def, off));
+  const b = end.sketchOnPlane(makePlane(def, off + f.distance));
+  return a.loftWith(b, { ruled: !!f.ruled });
+}
+
+// Sweep a circle or rectangle along a helix or a 3D polyline.
+function sweepTool(f) {
+  if (!(f.pw > 0) || (f.profile === 'rect' && !(f.ph > 0))) throw kerr('k.badSize');
+  let spine;
+  if (f.path === 'polyline') {
+    const pts = parsePoints3(f.pts);
+    if (pts.length < 2) throw kerr('k.pathPoints');
+    const edges = [];
+    for (let i = 0; i + 1 < pts.length; i++) edges.push(R.makeLine(pts[i], pts[i + 1]));
+    spine = R.assembleWire(edges);
+  } else {
+    if (!(f.pitch > 0 && f.height > 0 && f.helixR > 0)) throw kerr('k.badSize');
+    spine = R.makeHelix(f.pitch, f.height, f.helixR, f.pos || [0, 0, 0], axisVec(f.axis), !!f.lefthand);
+  }
+  const drawing = f.profile === 'rect' ? R.drawRectangle(f.pw, f.ph) : R.drawCircle(f.pw / 2);
+  const profile = drawing.sketchOnPlane(new R.Plane(spine.startPoint, null, spine.tangentAt(0)));
+  return R.genericSweep(profile.wire, spine, f.path === 'polyline' ? { transitionMode: 'right' } : { frenet: true });
+}
+
+export function parsePoints3(text) {
+  return String(text || '').split(/[;\n]+/)
+    .map((p) => p.split(',').map((v) => parseFloat(v)))
+    .filter((p) => p.length === 3 && p.every(Number.isFinite));
+}
+
+// Spur gear with involute flanks, built like FreeCAD's involute gear generator.
+function gearTool(f) {
+  const z = Math.round(f.teeth), m = f.module;
+  if (z < 6 || !(m > 0) || !(f.thickness > 0)) throw kerr('k.gear');
+  const alpha = ((f.pressure ?? 20) * Math.PI) / 180;
+  const rp = (m * z) / 2, rb = rp * Math.cos(alpha), ra = rp + m, rf = Math.max(rp - 1.25 * m, m * 0.5);
+  if (f.bore > 0 && f.bore / 2 >= rf) throw kerr('k.gear');
+  const inv = (r) => { const c = Math.acos(Math.min(1, rb / r)); return Math.tan(c) - c; };
+  const half = Math.PI / (2 * z) + inv(rp);
+  const pts = [];
+  const polar = (r, a) => [r * Math.cos(a), r * Math.sin(a)];
+  const start = Math.max(rb, rf);
+  for (let i = 0; i < z; i++) {
+    const c = (2 * Math.PI * i) / z;
+    const flank = [];
+    for (let k = 0; k <= 6; k++) flank.push(start + ((ra - start) * k) / 6);
+    if (rf < start) pts.push(polar(rf, c - half));
+    for (const r of flank) pts.push(polar(r, c - half + inv(r)));
+    for (const r of flank.slice().reverse()) pts.push(polar(r, c + half - inv(r)));
+    if (rf < start) pts.push(polar(rf, c + half));
+  }
+  let pen = R.draw(pts[0]);
+  for (let i = 1; i < pts.length; i++) pen = pen.lineTo(pts[i]);
+  let shape = pen.close().sketchOnPlane('XY').extrude(f.thickness);
+  if (f.bore > 0) shape = shape.cut(R.makeCylinder(f.bore / 2, f.thickness + 2, [0, 0, -1]));
+  return orientZ(shape, axisVec(f.axis)).translate(f.pos || [0, 0, 0]);
+}
+
 function holeTool(f, current) {
   const n = f.normal || [0, 0, 1];
   const len = Math.hypot(n[0], n[1], n[2]) || 1;
@@ -363,6 +430,19 @@ function applyFeature(f, current, sources, tools, features) {
       tools[idx] = tool;
       return applyOp(current, tool.clone(), f.op || 'add');
     }
+    case 'loft':
+    case 'sweep':
+    case 'gear': {
+      const tool = f.type === 'loft' ? loftTool(f) : f.type === 'sweep' ? sweepTool(f) : gearTool(f);
+      tools[idx] = tool;
+      return applyOp(current, tool.clone(), f.op || 'add');
+    }
+    case 'draft': {
+      needExact(current);
+      if (!f.angle) throw kerr('k.badSize');
+      const faces = resolveFaces(current, f.faces);
+      return current.draft(f.angle, (ff) => ff.inList(faces), makePlane(f.plane, f.offset || 0));
+    }
     case 'hole': {
       if (!current) throw kerr('k.nothingToCut');
       const tool = holeTool(f, current);
@@ -404,14 +484,23 @@ function applyFeature(f, current, sources, tools, features) {
       const n = Math.round(f.count || 0);
       if (n < 2) throw kerr('k.badCount');
       let shape = current;
+      if (f.type === 'linearPattern') {
+        // Optional second direction makes a rectangular grid.
+        const unit = (a) => { const d = axisVec(a); const l = Math.hypot(d[0], d[1], d[2]) || 1; return [d[0] / l, d[1] / l, d[2] / l]; };
+        const d1 = unit(f.direction), d2 = unit(f.direction2 || 'Y');
+        const n2 = Math.max(1, Math.round(f.count2 || 1));
+        for (let j = 0; j < n2; j++) {
+          for (let k = 0; k < n; k++) {
+            if (!j && !k) continue;
+            const a = (f.spacing || 0) * k, b = (f.spacing2 || 0) * j;
+            shape = applyOp(shape, transformTool(tool, { translate: [0, 1, 2].map((c) => d1[c] * a + d2[c] * b) }), op);
+          }
+        }
+        return shape;
+      }
       for (let k = 1; k < n; k++) {
         let t;
-        if (f.type === 'linearPattern') {
-          const d = axisVec(f.direction);
-          const len = Math.hypot(d[0], d[1], d[2]) || 1;
-          const s = (f.spacing || 0) * k;
-          t = transformTool(tool, { translate: [(d[0] / len) * s, (d[1] / len) * s, (d[2] / len) * s] });
-        } else {
+        {
           const total = f.angle ?? 360;
           const step = Math.abs(total) >= 360 ? total / n : total / (n - 1);
           t = transformTool(tool, { rotate: { angle: step * k, origin: f.origin || [0, 0, 0], axis: axisVec(f.axis) } });
@@ -488,18 +577,21 @@ export function describe(shape) {
     if (type === 'PLANE') {
       try { normal = vec(f.normalAt()); } catch { /* ignore */ }
     }
-    return { type, area, normal, dir: normal };
+    let radius = null;
+    if (type === 'CYLINDRE') {
+      try {
+        const e = f.edges.find((x) => x.geomType === 'CIRCLE');
+        if (e) radius = edgeRadius(e);
+      } catch { /* ignore */ }
+    }
+    return { type, area, normal, dir: normal, radius };
   });
   const edgeInfo = shapeEdges.map((e) => {
     let length = 0, mid = null, radius = null;
     try { length = e.length; mid = vec(e.pointAt(0.5)); } catch { /* ignore */ }
     const type = e.geomType;
     if (type === 'CIRCLE') {
-      try {
-        // Radius from three points on the arc.
-        const p1 = vec(e.pointAt(0)), p2 = vec(e.pointAt(0.5)), p3 = vec(e.pointAt(e.isClosed ? 0.25 : 1));
-        radius = circumradius(p1, p2, p3);
-      } catch { /* ignore */ }
+      try { radius = edgeRadius(e); } catch { /* ignore */ }
     }
     return { type, length, mid, radius, dir: directionOf(e) };
   });
@@ -549,6 +641,23 @@ function describeMesh(shape) {
     edges: [],
     props: { volume: shape.volume(), area: shape.surfaceArea(), com: null, bbox: [a, b], solids: 1 },
   };
+}
+
+// Radius of a circular edge, from three points on the arc.
+function edgeRadius(e) {
+  return circumradius(vec(e.pointAt(0)), vec(e.pointAt(0.5)), vec(e.pointAt(e.isClosed ? 0.25 : 1)));
+}
+
+// Hidden-line views for a 2D drawing. Paths are SVG path strings in model units.
+export function drawingViews(shape) {
+  const flat = (d) => d.toSVGPaths().flat(Infinity);
+  const view = (camera) => {
+    const p = R.drawProjection(shape, camera);
+    const [x, y, w, h] = p.visible.toSVGViewBox(0).split(/\s+/).map(Number);
+    return { visible: flat(p.visible), hidden: flat(p.hidden), box: [x, y, w, h] };
+  };
+  const iso = new R.ProjectionCamera([1, -1, 0.8], [-1, 1, -0.8], [1, 1, 0]);
+  return { front: view('front'), top: view('top'), right: view('right'), iso: view(iso) };
 }
 
 function circumradius(a, b, c) {

@@ -1,7 +1,7 @@
 {
   "name": "norma",
   "productName": "Norma",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "CAD viewer and modeller for CATPart, STEP, IGES and mesh files",
   "private": true,
   "type": "module",

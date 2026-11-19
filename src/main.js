@@ -87,7 +87,7 @@ let nextId = 1;
 let activeModel = null;
 let displayMode = 'shaded-edges';
 const section = { on: false, axis: 'x', t: 0.5, flip: false };
-const measure = { on: false, pending: null, items: [], hint: ['m.first'] };
+const measure = { on: false, mode: 'dist', pending: null, items: [], hint: ['m.first'] };
 let selection = null; // { model, mesh, face, faceIndex, highlight, area, size, point }
 
 // Edit mode is strictly opt-in; in view mode nothing below can change a model.
@@ -1032,7 +1032,60 @@ function snapPoint(hit, ev) {
   return best;
 }
 
+const firstHint = () => ({ dist: 'm.first', angle: 'ms.a1', info: 'ms.i1' }[measure.mode]);
+
+function hitNormal(hit) {
+  return hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
+}
+
+// What is under the cursor: edge length / radius, face type / area / radius.
+function measureInfoClick(hit, ev) {
+  let lines = Parts.measureInfo(hit, ev);
+  if (!lines) {
+    const faceIdx = findFace(hit.object, hit.faceIndex * 3);
+    const face = faceIdx >= 0 ? hit.object.userData.faces[faceIdx] : null;
+    if (face) {
+      const g = hit.object.geometry, pos = g.attributes.position, a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+      let area = 0;
+      for (let i = face.start; i < face.start + face.count; i += 3) {
+        a.fromBufferAttribute(pos, g.index.getX(i)).applyMatrix4(hit.object.matrixWorld);
+        b.fromBufferAttribute(pos, g.index.getX(i + 1)).applyMatrix4(hit.object.matrixWorld);
+        c.fromBufferAttribute(pos, g.index.getX(i + 2)).applyMatrix4(hit.object.matrixWorld);
+        area += b.sub(a).cross(c.sub(a)).length() / 2;
+      }
+      lines = [t(face.planar ? 'planar' : 'curved'), `${t('area')} ${fmt(area)} mm²`];
+    }
+  }
+  if (!lines) return;
+  const label = addLabel(hit.point, lines.join(' · '));
+  measure.items.push({ line: null, labels: [label] });
+  setMeasureHint('raw', { text: lines.join(' · ') });
+  requestRender();
+}
+
+function measureAngleClick(hit) {
+  const n = hitNormal(hit);
+  if (!measure.pending) {
+    measure.pending = { point: hit.point.clone(), normal: n, dot: addLabel(hit.point, '', 'dot') };
+    setMeasureHint('ms.a2');
+    return;
+  }
+  const { point: a, normal: n1, dot } = measure.pending;
+  const deg = THREE.MathUtils.radToDeg(n1.angleTo(n));
+  const between = Math.min(deg, 180 - deg);
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, hit.point]), measureLineMaterial);
+  line.renderOrder = 10;
+  overlayRoot.add(line);
+  const mid = a.clone().add(hit.point).multiplyScalar(0.5);
+  measure.items.push({ line, labels: [dot, addLabel(hit.point, '', 'dot'), addLabel(mid, `${fmt(between)}°`)] });
+  measure.pending = null;
+  setMeasureHint('raw', { text: `${fmt(between)}°  (${t('ms.normals')} ${fmt(deg)}°)` });
+  requestRender();
+}
+
 function measureClick(hit, ev) {
+  if (measure.mode === 'info') { measureInfoClick(hit, ev); return; }
+  if (measure.mode === 'angle') { measureAngleClick(hit); return; }
   const p = snapPoint(hit, ev);
   if (!measure.pending) {
     measure.pending = { point: p, dot: addLabel(p, '', 'dot') };
@@ -1059,7 +1112,7 @@ function cancelPending() {
   if (!measure.pending) return false;
   removeLabel(measure.pending.dot);
   measure.pending = null;
-  setMeasureHint('m.first');
+  setMeasureHint(firstHint());
   requestRender();
   return true;
 }
@@ -1067,12 +1120,14 @@ function cancelPending() {
 function clearMeasurements() {
   cancelPending();
   for (const item of measure.items) {
-    overlayRoot.remove(item.line);
-    item.line.geometry.dispose();
+    if (item.line) {
+      overlayRoot.remove(item.line);
+      item.line.geometry.dispose();
+    }
     item.labels.forEach(removeLabel);
   }
   measure.items.length = 0;
-  setMeasureHint('m.first');
+  setMeasureHint(firstHint());
   requestRender();
 }
 
@@ -1219,6 +1274,7 @@ $('sel-mode').addEventListener('change', (e) => { displayMode = e.target.value; 
 $('btn-proj').addEventListener('click', () => setProjection(camera !== ortho));
 $('btn-section').addEventListener('click', () => setSection(!section.on));
 $('btn-measure').addEventListener('click', () => setMeasure(!measure.on));
+$('measure-mode').addEventListener('change', (e) => { cancelPending(); measure.mode = e.target.value; setMeasureHint(firstHint()); });
 $('measure-clear').addEventListener('click', () => { clearMeasurements(); if (!measure.on) $('measure-panel').hidden = true; });
 
 for (const b of $('section-axis').querySelectorAll('button')) {

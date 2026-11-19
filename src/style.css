@@ -226,3 +226,23 @@ body.editing .tree-row:hover { background: var(--panel-2); }
 .tree-row button.icon { padding: 0 3px; line-height: 16px; }
 .tree-row button.icon:disabled { visibility: hidden; }
 .tree-empty { font-size: 12px; color: var(--muted); padding: 2px 4px; }
+
+/* ---- parameters, formulas, drawings ---- */
+.fp-row input.num, .sk-grid input.num { font-family: inherit; }
+.fp-row input.num { width: 100%; min-width: 0; padding: 3px 6px; font: inherit; font-variant-numeric: tabular-nums; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; }
+input.num.bad { border-color: var(--danger); color: #ffb3b3; }
+.fp-row textarea { width: 100%; min-width: 0; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; resize: vertical; }
+.fp-hint { margin: 0; font-size: 12px; line-height: 1.4; }
+.param-list { display: grid; gap: 4px; }
+.param-row { display: grid; grid-template-columns: 1fr 1fr 52px 22px; gap: 4px; align-items: center; }
+.param-row input { width: 100%; min-width: 0; padding: 3px 6px; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; }
+.param-row output { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); overflow: hidden; }
+#measure-panel { max-width: calc(100% - 150px); }
+#measure-hint { white-space: pre-wrap; }
+
+.modal { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; background: #101318; }
+.modal-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.modal-bar strong { margin-right: auto; }
+.modal-stage { flex: 1; min-height: 0; padding: 16px; display: flex; }
+.modal-stage svg { flex: 1; min-width: 0; width: 100%; height: 100%; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5); }
+.feature-panel:not([hidden]) + h2 { display: none; }

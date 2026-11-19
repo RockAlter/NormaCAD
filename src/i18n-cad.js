@@ -1,6 +1,19 @@
 // Translations for modelling (parts, features, sketches). Merged into i18n.js.
 
 export const en = {
+  'f.loft': 'Loft', 'f.sweep': 'Sweep (pipe, spring)', 'f.gear': 'Involute gear', 'f.draft': 'Draft',
+  'p.endType': 'End profile', 'p.endW': 'End width', 'p.endH': 'End height', 'p.endR': 'End radius', 'p.endN': 'End sides', 'p.endU': 'End shift X', 'p.endV': 'End shift Y', 'p.ruled': 'Straight sides',
+  'p.profile': 'Profile', 'p.pw': 'Profile size (Ø / width)', 'p.ph': 'Profile height', 'p.path': 'Path', 'p.helix': 'Helix', 'p.helixR': 'Helix radius', 'p.pitch': 'Pitch', 'p.height': 'Helix height', 'p.lefthand': 'Left-handed', 'p.pts': 'Path points', 'p.ptsHint': 'Points as "x, y, z; x, y, z; …"',
+  'p.teeth': 'Teeth', 'p.module': 'Module', 'p.pressure': 'Pressure angle (°)', 'p.faceWidth': 'Face width', 'p.bore': 'Bore Ø',
+  'p.draftFaces': 'Faces to taper', 'p.draftAngle': 'Draft angle (°)',
+  'p.direction2': 'Second direction', 'p.spacing2': 'Second spacing', 'p.count2': 'Second count',
+  'part.params': 'Parameters…', 'part.drawing': '2D drawing…',
+  'expr.hint': 'A number, or a formula such as =width / 2',
+  'params.title': 'Parameters', 'params.hint': 'Name a value here, then type =name in any size field. Changing it here updates the whole part.', 'params.name': 'Name', 'params.value': 'Value or formula', 'params.add': '+ Add parameter',
+  'params.badName': '"{name}" cannot be used as a name (letters, digits and _ only, each name once).', 'params.badValue': 'The value of "{name}" is not valid.',
+  'ms.dist': 'Distance', 'ms.angle': 'Angle', 'ms.info': 'Edge / face', 'ms.a1': 'Click the first face', 'ms.a2': 'Click the second face', 'ms.i1': 'Click an edge or a face', 'ms.normals': 'between normals', 'ms.line': 'Straight edge', 'ms.arc': 'Circular edge', 'ms.curve': 'Curved edge', 'ms.length': 'Length',
+  'dr.heading': '2D drawing', 'dr.title': 'Part name', 'dr.scale': 'Scale', 'dr.sheet': 'Sheet', 'dr.units': 'Units', 'dr.date': 'Date', 'dr.projection': 'Projection', 'dr.third': 'Third angle', 'dr.svg': 'Export SVG', 'dr.dxf': 'Export DXF', 'dr.print': 'Print / PDF', 'dr.close': 'Close',
+  'k.oneProfile': 'A loft needs exactly one outer shape in its sketch.', 'k.pathPoints': 'The path needs at least two points.', 'k.gear': 'Check the gear values: at least 6 teeth, and the bore must fit inside the teeth.', 'k.drawMesh': '2D drawings need an exact solid; this part is a mesh.',
   'm.part': 'Part ▾', 'm.create': 'Create ▾', 'm.modify': 'Modify ▾',
   'part.new': 'New part', 'part.editable': 'Make active model editable', 'part.combine': 'Combine with another model…', 'part.save': 'Save project (.norma)',
   exportStep: 'STEP (active part, exact)',
@@ -72,6 +85,19 @@ export const en = {
 };
 
 export const ja = {
+  'f.loft': 'ロフト', 'f.sweep': 'スイープ（パイプ、ばね）', 'f.gear': 'インボリュート歯車', 'f.draft': '抜き勾配',
+  'p.endType': '終端プロファイル', 'p.endW': '終端の幅', 'p.endH': '終端の高さ', 'p.endR': '終端の半径', 'p.endN': '終端の辺数', 'p.endU': '終端のずれ X', 'p.endV': '終端のずれ Y', 'p.ruled': '直線で接続',
+  'p.profile': 'プロファイル', 'p.pw': 'プロファイル寸法（Ø／幅）', 'p.ph': 'プロファイルの高さ', 'p.path': 'パス', 'p.helix': 'らせん', 'p.helixR': 'らせん半径', 'p.pitch': 'ピッチ', 'p.height': 'らせんの高さ', 'p.lefthand': '左巻き', 'p.pts': 'パスの点', 'p.ptsHint': '点を「x, y, z; x, y, z; …」の形式で入力',
+  'p.teeth': '歯数', 'p.module': 'モジュール', 'p.pressure': '圧力角（°）', 'p.faceWidth': '歯幅', 'p.bore': '軸穴径',
+  'p.draftFaces': '勾配をつける面', 'p.draftAngle': '抜き勾配（°）',
+  'p.direction2': '第2方向', 'p.spacing2': '第2方向の間隔', 'p.count2': '第2方向の個数',
+  'part.params': 'パラメーター…', 'part.drawing': '2D図面…',
+  'expr.hint': '数値、または =width / 2 のような数式',
+  'params.title': 'パラメーター', 'params.hint': 'ここで値に名前を付け、寸法欄に =名前 と入力します。ここで変更するとパート全体が更新されます。', 'params.name': '名前', 'params.value': '値または数式', 'params.add': '+ パラメーターを追加',
+  'params.badName': '「{name}」は名前に使えません（英数字と _ のみ、重複不可）。', 'params.badValue': '「{name}」の値が正しくありません。',
+  'ms.dist': '距離', 'ms.angle': '角度', 'ms.info': 'エッジ／面', 'ms.a1': '1つ目の面をクリック', 'ms.a2': '2つ目の面をクリック', 'ms.i1': 'エッジまたは面をクリック', 'ms.normals': '法線間', 'ms.line': '直線エッジ', 'ms.arc': '円弧エッジ', 'ms.curve': '曲線エッジ', 'ms.length': '長さ',
+  'dr.heading': '2D図面', 'dr.title': '部品名', 'dr.scale': '尺度', 'dr.sheet': '用紙', 'dr.units': '単位', 'dr.date': '日付', 'dr.projection': '投影法', 'dr.third': '第三角法', 'dr.svg': 'SVGで保存', 'dr.dxf': 'DXFで保存', 'dr.print': '印刷／PDF', 'dr.close': '閉じる',
+  'k.oneProfile': 'ロフトのスケッチには外形を1つだけ描いてください。', 'k.pathPoints': 'パスには2点以上が必要です。', 'k.gear': '歯車の値を確認してください（歯数6以上、軸穴は歯底より小さく）。', 'k.drawMesh': '2D図面には正確なソリッドが必要です。このパートはメッシュです。',
   'm.part': 'パート ▾', 'm.create': '作成 ▾', 'm.modify': '修正 ▾',
   'part.new': '新規パート', 'part.editable': 'アクティブなモデルを編集可能にする', 'part.combine': '他のモデルと結合…', 'part.save': 'プロジェクトを保存（.norma）',
   exportStep: 'STEP（アクティブなパート、正確な形状）',
@@ -143,6 +169,19 @@ export const ja = {
 };
 
 export const zh = {
+  'f.loft': '放样', 'f.sweep': '扫掠（管道、弹簧）', 'f.gear': '渐开线齿轮', 'f.draft': '拔模',
+  'p.endType': '终止轮廓', 'p.endW': '终止宽度', 'p.endH': '终止高度', 'p.endR': '终止半径', 'p.endN': '终止边数', 'p.endU': '终止偏移 X', 'p.endV': '终止偏移 Y', 'p.ruled': '直纹连接',
+  'p.profile': '轮廓', 'p.pw': '轮廓尺寸（Ø／宽）', 'p.ph': '轮廓高度', 'p.path': '路径', 'p.helix': '螺旋线', 'p.helixR': '螺旋半径', 'p.pitch': '螺距', 'p.height': '螺旋高度', 'p.lefthand': '左旋', 'p.pts': '路径点', 'p.ptsHint': '点的格式为“x, y, z; x, y, z; …”',
+  'p.teeth': '齿数', 'p.module': '模数', 'p.pressure': '压力角（°）', 'p.faceWidth': '齿宽', 'p.bore': '轴孔直径',
+  'p.draftFaces': '要拔模的面', 'p.draftAngle': '拔模角（°）',
+  'p.direction2': '第二方向', 'p.spacing2': '第二方向间距', 'p.count2': '第二方向数量',
+  'part.params': '参数…', 'part.drawing': '二维工程图…',
+  'expr.hint': '数字，或类似 =width / 2 的公式',
+  'params.title': '参数', 'params.hint': '在此为数值命名，然后在任意尺寸框中输入 =名称。在此修改后整个零件都会更新。', 'params.name': '名称', 'params.value': '数值或公式', 'params.add': '+ 添加参数',
+  'params.badName': '“{name}”不能用作名称（仅限字母、数字和 _，且不可重复）。', 'params.badValue': '“{name}”的值无效。',
+  'ms.dist': '距离', 'ms.angle': '角度', 'ms.info': '边／面', 'ms.a1': '点击第一个面', 'ms.a2': '点击第二个面', 'ms.i1': '点击一条边或一个面', 'ms.normals': '法线夹角', 'ms.line': '直边', 'ms.arc': '圆弧边', 'ms.curve': '曲线边', 'ms.length': '长度',
+  'dr.heading': '二维工程图', 'dr.title': '零件名称', 'dr.scale': '比例', 'dr.sheet': '图幅', 'dr.units': '单位', 'dr.date': '日期', 'dr.projection': '投影法', 'dr.third': '第三角', 'dr.svg': '导出SVG', 'dr.dxf': '导出DXF', 'dr.print': '打印／PDF', 'dr.close': '关闭',
+  'k.oneProfile': '放样草图中只能有一个外轮廓。', 'k.pathPoints': '路径至少需要两个点。', 'k.gear': '请检查齿轮参数：至少6齿，且轴孔必须小于齿根。', 'k.drawMesh': '二维工程图需要精确实体；该零件是网格。',
   'm.part': '零件 ▾', 'm.create': '创建 ▾', 'm.modify': '修改 ▾',
   'part.new': '新建零件', 'part.editable': '将当前模型转为可编辑', 'part.combine': '与其他模型合并…', 'part.save': '保存项目（.norma）',
   exportStep: 'STEP（当前零件，精确几何）',

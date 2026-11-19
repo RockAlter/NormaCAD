@@ -27,7 +27,7 @@ The app always starts in View mode, where nothing can change a model.
 - Rotate, pan, zoom to cursor, fit, seven standard views, perspective or parallel projection
 - Display modes: shaded with edges, shaded, hidden line, wireframe, X-ray, triangle mesh
 - Section plane along X, Y or Z
-- Point-to-point measurement with ΔX / ΔY / ΔZ and vertex snapping
+- Measure: point-to-point distance with ΔX / ΔY / ΔZ and vertex snapping, angle between two faces, and edge length, radius, diameter or face area under the cursor
 - Click a face to see its number, planar or curved type, area and extent
 - Screenshot to PNG
 
@@ -40,8 +40,10 @@ Switch with the **View | Edit** control. Edit mode adds its own toolbar with two
 A **part** is a solid built from an ordered list of features, shown as a tree under the part in the model list. Click a feature to change its values; the part rebuilds from that point on. Features can be switched off, reordered or deleted, and every change can be undone.
 
 - **Part ▾** — new empty part; make the active model editable; combine with another model (add, subtract, intersect); save the project as `.norma`
-- **Create ▾** — box, cylinder, sphere, cone, torus; extrude a sketch (pad or pocket, reverse, symmetric, through all); revolve a sketch
-- **Modify ▾** — hole (with optional counterbore), fillet and chamfer on picked edges, shell with picked faces open, mirror, linear and polar pattern of an earlier feature, cut by plane, move / rotate / scale
+- **Create ▾** — box, cylinder, sphere, cone, torus; extrude a sketch (pad or pocket, reverse, symmetric, through all); revolve a sketch; loft between two profiles; sweep a profile along a helix or 3D polyline (pipes, springs); involute spur gear
+- **Modify ▾** — hole (with optional counterbore), fillet and chamfer on picked edges, shell with picked faces open, draft (taper) on picked faces, mirror, linear pattern in one or two directions, polar pattern, cut by plane, move / rotate / scale
+- **Parameters** — name values under Part ▾ → Parameters, then type formulas such as `=width / 2` in any size field; changing a parameter updates the whole part
+- **2D drawings** — Part ▾ → 2D drawing: third-angle front, top and right views with hidden lines, an isometric view, overall dimensions and a title block on A4, A3 or A2. Export SVG or true-size DXF, or print to PDF. Exact solids only.
 - **Sketches** — on the XY, XZ or YZ plane (with offset) or on any flat face you click. Draw rectangles and circles by dragging and polylines by clicking on a snapping grid, or add rectangles, circles, polygons, slots and polylines by numbers. A shape drawn inside another becomes a hole.
 - **Properties** — volume, surface area, centre of mass, and mass from a density you set; type, area and normal of a clicked face
 - **Export** — STEP (exact) for the active part; STL, GLB or OBJ for everything visible
@@ -51,7 +53,7 @@ Parts come in two kinds:
 | Part made from | Body | Available |
 |---|---|---|
 | Nothing (new part), or a STEP file | Exact solid (B-Rep, OpenCascade) | Everything, including STEP export |
-| A CATPart, STL, OBJ or other mesh | Mesh solid (Manifold) | Everything except fillet, chamfer and shell; no STEP export |
+| A CATPart, STL, OBJ or other mesh | Mesh solid (Manifold) | Everything except fillet, chamfer, shell and draft; no STEP export or 2D drawings |
 
 Fillets, chamfers and shells reference edges and faces by position and direction, so they follow the geometry when earlier features change size. If a reference becomes ambiguous the feature reports an error (⚠) instead of guessing; edit it and pick again.
 
@@ -129,6 +131,8 @@ node test/mesh2solid.test.mjs path/to/part.CATPart
 | `src/cad/worker.js`, `src/cad/kernel.js` | Modelling kernel in a Web Worker, and its client |
 | `src/cad/partui.js`, `src/cad/features.js` | Feature tree, dialogs, picking and sketcher |
 | `src/cad/meshsolid.js` | Turning closed meshes into mesh solids |
+| `src/cad/expr.js` | Parameters and the formula parser |
+| `src/cad/drawing.js` | 2D drawing sheet, SVG and DXF output |
 | `server.js` | Small static server, no dependencies |
 | `electron-main.js` | Desktop shell |
 

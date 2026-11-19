@@ -82,6 +82,8 @@
           <button id="part-new" data-i18n="part.new"></button>
           <button id="part-editable" data-i18n="part.editable"></button>
           <button id="part-combine" data-i18n="part.combine"></button>
+          <button id="part-params" data-i18n="part.params"></button>
+          <button id="part-drawing" data-i18n="part.drawing"></button>
           <hr>
           <button id="part-save" data-i18n="part.save"></button>
         </div>
@@ -172,6 +174,7 @@
       <div id="measure-panel" class="float-panel" hidden>
         <div class="row">
           <strong data-i18n="measure"></strong>
+          <select id="measure-mode" data-i18n-aria="measure"><option value="dist" data-i18n="ms.dist"></option><option value="angle" data-i18n="ms.angle"></option><option value="info" data-i18n="ms.info"></option></select>
           <span id="measure-hint" class="muted"></span>
           <button id="measure-clear" data-i18n="clear"></button>
         </div>
@@ -192,6 +195,18 @@
     <span id="status-left" data-i18n="statusHint"></span>
     <span id="status-right"></span>
   </footer>
+
+  <div id="drawing-modal" class="modal" role="dialog" aria-modal="true" hidden>
+    <div class="modal-bar">
+      <strong data-i18n="dr.heading"></strong>
+      <select id="drawing-size" data-i18n-aria="dr.sheet"><option>A4</option><option selected>A3</option><option>A2</option></select>
+      <button id="drawing-svg" class="primary" data-i18n="dr.svg"></button>
+      <button id="drawing-dxf" data-i18n="dr.dxf"></button>
+      <button id="drawing-print" data-i18n="dr.print"></button>
+      <button id="drawing-close" data-i18n="dr.close"></button>
+    </div>
+    <div id="drawing-stage" class="modal-stage"></div>
+  </div>
 
   <input id="file-input" type="file" multiple hidden
          accept=".norma,.catpart,.cgr,.step,.stp,.iges,.igs,.brep,.brp,.stl,.obj,.ply,.3mf,.gltf,.glb">

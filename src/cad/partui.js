@@ -2,7 +2,9 @@
 import * as THREE from 'three';
 import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { call, startKernel } from './kernel.js';
-import { CREATE, MODIFY, FIELDS, TOOL_FEATURES, EXACT_ONLY, defaults, toEngine, summary, niceStep } from './features.js';
+import { CREATE, MODIFY, FIELDS, LABELS, TOOL_FEATURES, EXACT_ONLY, defaults, toEngine, summary, niceStep } from './features.js';
+import { evalExpr, paramValues, applyExprs, validName } from './expr.js';
+import { SHEETS, buildSheet, buildDXF } from './drawing.js';
 import { partMaterial, addComputedEdges } from '../meshkit.js';
 import { t, errorText } from '../i18n.js';
 
@@ -33,6 +35,8 @@ export function initParts(context) {
     ['part-new', () => newPart()],
     ['part-editable', () => makeEditable(ctx.getActive())],
     ['part-combine', () => openCombine()],
+    ['part-params', () => openParams()],
+    ['part-drawing', () => openDrawing()],
     ['part-save', () => saveProject()],
   ]) $(id).addEventListener('click', () => { closeMenus(); fn(); });
   for (const id of ['btn-part', 'btn-create', 'btn-modify']) {
@@ -92,7 +96,7 @@ function createPartModel(name, features = []) {
     parts: [],
     bytes: 0,
     kind: 'part',
-    part: { id, features, status: [], body: null, density: 7.85, seq: 0, color: PART_COLOR.clone() },
+    part: { id, features, params: [], status: [], body: null, density: 7.85, seq: 0, color: PART_COLOR.clone() },
   };
   ctx.registerModel(model);
   return model;
@@ -130,8 +134,10 @@ function sanitize(f) {
   return out;
 }
 
-function engineFeatures(features) {
-  return features.map((f) => toEngine(sanitize(f)));
+// Formulas are resolved here, so the kernel only ever sees plain numbers.
+function engineFeatures(features, params) {
+  const { vars } = paramValues(params);
+  return features.map((f) => toEngine(applyExprs(sanitize(f), vars)));
 }
 
 // Rebuild a part from a feature list (defaults to its own) and show the result.
@@ -143,7 +149,7 @@ async function rebuild(model, features = model.part.features, { fitView = false 
   let res;
   try {
     await startKernel();
-    res = await call('build', { partId: part.id, features: engineFeatures(features) });
+    res = await call('build', { partId: part.id, features: engineFeatures(features, part.params) });
   } catch (err) {
     if (seq === part.seq) {
       part.building = false;
@@ -509,13 +515,51 @@ function button(label, onClick, cls = '') {
   return b;
 }
 
+// A number box that also takes a formula such as "=width / 2".
+function exprInput(obj, key, onChange) {
+  const i = document.createElement('input');
+  i.type = 'text';
+  i.inputMode = 'decimal';
+  i.className = 'num';
+  i.spellcheck = false;
+  const show = (v) => (Number.isFinite(v) ? String(+(+v).toFixed(4)) : '');
+  i.value = obj.expr?.[key] ? '=' + obj.expr[key] : show(obj[key]);
+  i.title = obj.expr?.[key] ? show(obj[key]) : t('expr.hint');
+  i.addEventListener('input', () => {
+    const text = i.value.trim();
+    try {
+      const v = evalExpr(text, paramValues(dialog.model.part.params).vars);
+      if (text.startsWith('=')) obj.expr = { ...obj.expr, [key]: text.slice(1).trim() };
+      else if (obj.expr) { delete obj.expr[key]; if (!Object.keys(obj.expr).length) delete obj.expr; }
+      obj[key] = v;
+      i.classList.remove('bad');
+      i.title = text.startsWith('=') ? show(v) : t('expr.hint');
+      onChange(v);
+    } catch {
+      i.classList.add('bad');
+    }
+  });
+  return i;
+}
+
 function renderFields(body) {
   const d = dialog.draft;
   const changed = () => { schedulePreview(); refreshOverlay(); };
-  for (const [key, kind, options] of FIELDS[d.type] || []) {
-    const label = t('p.' + key);
+  const fields = FIELDS[d.type] || [];
+  const conditional = fields.some((f) => f[3]);
+  const rerender = () => { body.replaceChildren(); renderFields(body); changed(); };
+  for (const [key, kind, options, when] of fields) {
+    if (when && !when(d)) continue;
+    const label = t(LABELS[d.type + '.' + key] || 'p.' + key);
     if (kind === 'num') {
-      body.append(row(label, numInput(d[key], (v) => { d[key] = v; changed(); })));
+      body.append(row(label, exprInput(d, key, changed)));
+    } else if (kind === 'text') {
+      const ta = document.createElement('textarea');
+      ta.rows = 3;
+      ta.value = d[key] || '';
+      ta.title = t('p.ptsHint');
+      ta.addEventListener('input', () => { d[key] = ta.value; changed(); });
+      body.append(row(label, ta));
     } else if (kind === 'vec3') {
       const wrap = document.createElement('span');
       wrap.className = 'vec3';
@@ -530,7 +574,7 @@ function renderFields(body) {
       body.append(row(label, wrap));
     } else if (kind === 'select') {
       const s = selectEl(options.map(([v, l]) => [v, l.includes('.') ? t(l) : l]), d[key]);
-      s.addEventListener('change', () => { d[key] = s.value; changed(); });
+      s.addEventListener('change', () => { d[key] = s.value; if (conditional) rerender(); else changed(); });
       body.append(row(label, s));
     } else if (kind === 'check') {
       body.append(row(label, checkEl(d[key], (v) => { d[key] = v; changed(); })));
@@ -574,7 +618,7 @@ function refsRow(kind) {
   });
   if (dialog.pick) ctx.setCursor('crosshair');
   wrap.append(count, pickBtn, clearBtn);
-  return row(t('p.' + kind), wrap);
+  return row(t(LABELS[d.type + '.' + kind] || 'p.' + kind), wrap);
 }
 
 // ---- sketch editor ---------------------------------------------------------------------------
@@ -695,7 +739,8 @@ function renderShapes() {
       for (const k of SHAPE_FIELDS[s.type]) {
         const l = document.createElement('label');
         l.textContent = t('sk.f.' + k);
-        l.append(numInput(s[k] ?? 0, (v) => { s[k] = v; schedulePreview(); refreshOverlay(); }));
+        s[k] ??= 0;
+        l.append(exprInput(s, k, () => { schedulePreview(); refreshOverlay(); }));
         grid.append(l);
       }
     }
@@ -1150,6 +1195,7 @@ export function renderTree(model) {
     return wrap;
   }
   const editing = ctx.isEditing();
+  const { vars } = paramValues(model.part.params);
   feats.forEach((f, i) => {
     const r = document.createElement('div');
     const err = model.part.status[i];
@@ -1157,7 +1203,7 @@ export function renderTree(model) {
     if (dialog && dialog.model === model && dialog.index === i && !dialog.isNew) r.classList.add('editing');
     const label = document.createElement('span');
     label.className = 'tree-label';
-    label.textContent = `${i + 1}. ${summary(f, t)}`;
+    label.textContent = `${i + 1}. ${summary(applyExprs(f, vars), t)}`;
     r.title = err ? errorText(err) : editing ? t('tree.editHint') : '';
     if (err) {
       const w = document.createElement('span');
@@ -1323,7 +1369,7 @@ async function saveProject() {
     return {
       app: 'Norma',
       format: 1,
-      parts: parts.map((m) => ({ name: m.name, density: m.part.density, visible: m.object.visible, features: m.part.features.map(sanitize) })),
+      parts: parts.map((m) => ({ name: m.name, density: m.part.density, params: m.part.params, visible: m.object.visible, features: m.part.features.map(sanitize) })),
       sources,
     };
   });
@@ -1355,11 +1401,147 @@ export async function openProject(name, buffer) {
   for (const p of doc.parts) {
     const m = createPartModel(p.name || name, p.features || []);
     m.part.density = p.density ?? 7.85;
+    m.part.params = p.params || [];
     if (p.visible === false) m.object.visible = false;
     made.push(m);
   }
   for (const m of made) await rebuild(m);
   return made;
+}
+
+// =================================================================================================
+// Parameters (named values usable as =formulas in any size field)
+// =================================================================================================
+
+function openParams() {
+  const model = activePart();
+  if (!model) { ctx.toast(t('k.needPart')); return; }
+  const list = model.part.params.map((p) => ({ ...p }));
+  openDialog({
+    model,
+    title: t('params.title'),
+    custom: (body) => {
+      const hint = document.createElement('p');
+      hint.className = 'muted fp-hint';
+      hint.textContent = t('params.hint');
+      const rows = document.createElement('div');
+      rows.className = 'param-list';
+      const render = () => {
+        rows.replaceChildren();
+        const { vars } = paramValues(list);
+        list.forEach((p, i) => {
+          const r = document.createElement('div');
+          r.className = 'param-row';
+          const name = document.createElement('input');
+          name.value = p.name;
+          name.placeholder = t('params.name');
+          name.setAttribute('aria-label', t('params.name'));
+          const value = document.createElement('input');
+          value.value = p.value;
+          value.placeholder = t('params.value');
+          value.setAttribute('aria-label', t('params.value'));
+          const out = document.createElement('output');
+          out.textContent = p.name in vars ? String(+vars[p.name].toFixed(4)) : '–';
+          name.addEventListener('change', () => { p.name = name.value.trim(); render(); });
+          value.addEventListener('change', () => { p.value = value.value.trim(); render(); });
+          r.append(name, value, out, button('✕', () => { list.splice(i, 1); render(); }, 'icon'));
+          rows.append(r);
+        });
+      };
+      render();
+      body.append(hint, rows, button(t('params.add'), () => { list.push({ name: 'p' + (list.length + 1), value: '10' }); render(); }));
+      return () => {
+        const names = list.map((p) => p.name);
+        const badName = names.find((n, i) => !validName(n) || names.indexOf(n) !== i);
+        if (badName !== undefined) { setMsg(t('params.badName', { name: badName }), true); return false; }
+        const { errors } = paramValues(list);
+        if (errors.length) { setMsg(t('params.badValue', { name: errors[0] }), true); return false; }
+        const before = model.part.params;
+        const apply = (params) => { model.part.params = params; rebuild(model); };
+        ctx.pushCommand({ undo: () => apply(before), redo: () => apply(list) });
+        apply(list);
+        return true;
+      };
+    },
+  });
+}
+
+// =================================================================================================
+// 2D drawings
+// =================================================================================================
+
+async function openDrawing() {
+  const model = activePart();
+  if (!model) { ctx.toast(t('k.needPart')); return; }
+  if (dialog) closeDialog(false);
+  await rebuild(model);
+  const views = await withKernel(() => call('drawing', { partId: model.part.id }));
+  if (!views) return;
+  const stage = $('drawing-stage');
+  const sizeSel = $('drawing-size');
+  const safeName = model.name.replace(/[\\/:*?"<>|]+/g, '_');
+  const sheet = () => {
+    const p = model.part.body?.props;
+    const g = p?.volume != null ? (p.volume / 1000) * model.part.density : null;
+    return buildSheet(views, {
+      name: model.name,
+      size: sizeSel.value,
+      date: new Date().toISOString().slice(0, 10),
+      mass: g == null ? '' : g >= 1000 ? (g / 1000).toFixed(3) + ' kg' : g.toFixed(1) + ' g',
+    }, {
+      title: t('dr.title'), scale: t('dr.scale'), sheet: t('dr.sheet'), units: t('dr.units'), mass: t('mass'),
+      date: t('dr.date'), projection: t('dr.projection'), third: t('dr.third'),
+    });
+  };
+  const render = () => { stage.innerHTML = sheet(); };
+  sizeSel.onchange = render;
+  $('drawing-svg').onclick = () => ctx.download(sheet(), safeName + '.svg', 'image/svg+xml');
+  $('drawing-dxf').onclick = () => ctx.download(buildDXF(views).text, safeName + '.dxf', 'application/dxf');
+  $('drawing-print').onclick = () => {
+    const [w, h] = SHEETS[sizeSel.value];
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'position:fixed;width:0;height:0;border:0';
+    frame.srcdoc = '<!doctype html><style>@page{size:' + w + 'mm ' + h + 'mm;margin:0}html,body{margin:0}svg{display:block;width:' + w + 'mm;height:' + h + 'mm}</style>' + sheet();
+    frame.onload = () => { frame.contentWindow.print(); setTimeout(() => frame.remove(), 60000); };
+    document.body.append(frame);
+  };
+  $('drawing-close').onclick = () => { $('drawing-modal').hidden = true; stage.replaceChildren(); };
+  render();
+  $('drawing-modal').hidden = false;
+}
+
+// =================================================================================================
+// Measure: what is under the cursor
+// =================================================================================================
+
+const n2 = (v) => (+v).toLocaleString('en-US', { maximumFractionDigits: 2 });
+
+export function measureInfo(hit, e) {
+  const mesh = hit.object;
+  const model = mesh.userData.partModel;
+  const body = model?.part.body;
+  if (!body) return null;
+  if (body.mesh) return [t('sf.mesh')];
+  const lines = mesh.children.find((c) => c.userData.segEdge);
+  if (lines) {
+    const ray = ctx.raycasterFromEvent(e);
+    ray.params.Line.threshold = ctx.worldPerPixel(mesh) * 5;
+    const hits = [];
+    THREE.LineSegments.prototype.raycast.call(lines, ray, hits);
+    const near = hits.sort((a, b) => a.distanceToRay - b.distanceToRay)[0];
+    const info = near ? body.edges[lines.userData.segEdge[Math.floor(near.index / 2)]] : null;
+    if (info) {
+      const out = [t(info.type === 'LINE' ? 'ms.line' : info.type === 'CIRCLE' ? 'ms.arc' : 'ms.curve'), t('ms.length') + ' ' + n2(info.length) + ' mm'];
+      if (info.radius) out.push('R ' + n2(info.radius) + ' mm', 'Ø ' + n2(info.radius * 2) + ' mm');
+      return out;
+    }
+  }
+  const gi = findGroup(mesh, hit.faceIndex * 3);
+  const info = gi >= 0 ? body.faces[mesh.userData.faces[gi].face] : null;
+  if (!info) return null;
+  const out = [t(SURFACE[info.type] || 'sf.other'), t('area') + ' ' + n2(info.area) + ' mm²'];
+  if (info.radius) out.push('R ' + n2(info.radius) + ' mm', 'Ø ' + n2(info.radius * 2) + ' mm');
+  return out;
 }
 
 export function dropPart(model) {

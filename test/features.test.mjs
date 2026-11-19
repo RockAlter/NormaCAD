@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import opencascade from 'replicad-opencascadejs';
 import * as R from 'replicad';
-import { setKernel, evaluate, describe } from '../src/cad/build.js';
+import { setKernel, evaluate, describe, drawingViews } from '../src/cad/build.js';
+import { evalExpr, paramValues, applyExprs } from '../src/cad/expr.js';
 
 const require = createRequire(import.meta.url);
 R.setOC(await opencascade({ wasmBinary: readFileSync(require.resolve('replicad-opencascadejs/wasm')) }));
@@ -124,6 +125,45 @@ check('describe faces', d.faces.length === r.shape.faces.length && covered === t
 const circle = d.edges.find((e) => e.type === 'CIRCLE');
 check('circle edge radius', circle && near(circle.radius, 8, 1e-6), circle ? circle.radius : 'none');
 check('volume props', near(d.props.volume, 60000 - Math.PI * 640, 0.5) && d.props.com && near(d.props.com[2], 5, 1e-6));
+
+// 6. Loft, sweep, gear, draft, grid pattern, drawing views, formulas
+r = run([{ type: 'loft', op: 'add', distance: 30, endType: 'rect', endW: 20, endH: 20, sketch: { plane: 'XY', shapes: [{ type: 'rect', cx: 0, cy: 0, w: 40, h: 40 }] } }]);
+check('loft frustum', !r.errs.length && near(R.measureVolume(r.shape), (30 / 3) * (1600 + 400 + 800), 1), r.errs.join(';') || R.measureVolume(r.shape).toFixed(1));
+
+r = run([{ type: 'sweep', op: 'add', profile: 'circle', pw: 4, path: 'helix', pitch: 10, height: 40, helixR: 20, pos: [0, 0, 0], axis: 'Z' }]);
+check('helix sweep (spring)', !r.errs.length && near(R.measureVolume(r.shape), Math.PI * 4 * Math.hypot(2 * Math.PI * 20, 10) * 4, 10), r.errs.join(';') || R.measureVolume(r.shape).toFixed(1));
+
+r = run([{ type: 'sweep', op: 'add', profile: 'rect', pw: 10, ph: 6, path: 'polyline', pts: '0,0,0; 0,0,50; 40,0,50' }]);
+check('polyline sweep', !r.errs.length && R.measureVolume(r.shape) > 4500, r.errs.join(';') || R.measureVolume(r.shape).toFixed(1));
+
+r = run([{ type: 'gear', op: 'add', pos: [0, 0, 0], axis: 'Z', teeth: 24, module: 2, pressure: 20, thickness: 10, bore: 10 }]);
+const gearArea = R.measureVolume(r.shape) / 10 + Math.PI * 25;
+check('involute gear', !r.errs.length && near(gearArea, Math.PI * 24 * 24, Math.PI * 24 * 24 * 0.06) && near(r.shape.boundingBox.bounds[1][0], 26, 0.2), r.errs.join(';') || gearArea.toFixed(1));
+
+r = run([
+  { type: 'box', op: 'add', pos: [0, 0, 0], w: 20, d: 20, h: 20 },
+  { type: 'draft', angle: 5, plane: 'XY', offset: 0, faces: [{ p: [10, 0, 10], type: 'PLANE', dir: [0, 1, 0] }] },
+]);
+check('draft', !r.errs.length && near(R.measureVolume(r.shape), 8000 - 0.5 * 20 * 20 * Math.tan(5 * Math.PI / 180) * 20, 2), r.errs.join(';') || R.measureVolume(r.shape).toFixed(1));
+
+r = run([
+  { type: 'box', op: 'add', pos: [0, 0, 0], w: 100, d: 100, h: 5 },
+  { type: 'cylinder', op: 'cut', pos: [20, 20, -1], r: 3, h: 10, axis: 'Z' },
+  { type: 'linearPattern', of: 1, direction: 'X', spacing: 20, count: 3, direction2: 'Y', spacing2: 30, count2: 2 },
+]);
+check('grid pattern', !r.errs.length && near(R.measureVolume(r.shape), 50000 - 6 * Math.PI * 9 * 5, 0.5), r.errs.join(';') || R.measureVolume(r.shape).toFixed(1));
+
+const views = drawingViews(run([{ type: 'box', op: 'add', pos: [0, 0, 0], w: 100, d: 60, h: 10 }]).shape);
+check('drawing views', near(views.front.box[2], 100, 1e-3) && near(views.front.box[3], 10, 1e-3) && near(views.top.box[3], 60, 1e-3) && near(views.right.box[2], 60, 1e-3) && views.iso.visible.length > 0);
+
+const { vars, errors } = paramValues([{ name: 'w', value: '40' }, { name: 'half', value: 'w / 2' }, { name: 'bad', value: 'nope + 1' }]);
+check('parameters', vars.half === 20 && errors.length === 1 && errors[0] === 'bad');
+check('formula grammar', near(evalExpr('=2 * (3 + 4) ^ 2 - sqrt(16) + cos(60)', {}), 94.5, 1e-9));
+let injected = false;
+try { evalExpr('constructor.constructor("x")()', {}); injected = true; } catch { /* rejected */ }
+check('formula rejects code', !injected);
+const applied = applyExprs({ type: 'box', w: 1, expr: { w: 'w_p * 2' }, sketch: { shapes: [{ r: 1, expr: { r: 'w_p' } }] } }, { w_p: 7 });
+check('formulas applied', applied.w === 14 && applied.sketch.shapes[0].r === 7 && !('expr' in applied));
 
 console.log(failed ? `${failed} FAILED` : 'all passed');
 process.exit(failed ? 1 : 0);
