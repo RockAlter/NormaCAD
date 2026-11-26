@@ -40,9 +40,22 @@ export function weldMesh(positions, indices, decimals = 4) {
   return { positions: Float32Array.from(pos), triangles: Uint32Array.from(tri), openEdges, nonManifoldEdges };
 }
 
+// Welds as finely as possible: 0.0001 mm first, then coarser when faces were tessellated
+// separately (IGES, some STL exporters) and their shared edges do not quite meet.
+export function weldClosed(positions, indices) {
+  let first = null;
+  for (const decimals of [4, 3, 2]) {
+    const w = weldMesh(positions, indices, decimals);
+    first ??= w;
+    if (!w.openEdges && !w.nonManifoldEdges) return w;
+  }
+  return first;
+}
+
 // mf = Manifold module, R = replicad. Returns a replicad MeshShape.
 export function meshToBody(mf, R, positions, triangles) {
   const mesh = new mf.Mesh({ numProp: 3, vertProperties: positions, triVerts: triangles });
+  mesh.merge(); // close remaining hairline gaps along open edges
   const manifold = new mf.Manifold(mesh);
   const status = manifold.status();
   if (status !== 'NoError') {

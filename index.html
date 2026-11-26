@@ -208,6 +208,17 @@
     <div id="drawing-stage" class="modal-stage"></div>
   </div>
 
+  <div id="preview-modal" class="modal preview" role="dialog" aria-modal="true" hidden>
+    <div class="modal-bar">
+      <strong id="preview-title"></strong>
+      <button id="preview-close" data-i18n="dr.close"></button>
+    </div>
+    <div class="preview-body">
+      <img id="preview-img" alt="">
+      <p id="preview-text"></p>
+    </div>
+  </div>
+
   <input id="file-input" type="file" multiple hidden
          accept=".norma,.catpart,.cgr,.step,.stp,.iges,.igs,.brep,.brp,.stl,.obj,.ply,.3mf,.gltf,.glb">
   <script type="module" src="/src/main.js"></script>

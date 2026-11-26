@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { loadModel, extensionOf } from './loaders/index.js';
+import { loadModel, extensionOf, RESOURCE_EXT, SUPPORTED } from './loaders/index.js';
 import { partMaterial, addComputedEdges, faceOutlineLines, DEFAULT_COLOR } from './meshkit.js';
 import { t, errorText, applyStatic, setLang, getLang, APP_NAME } from './i18n.js';
 import * as Parts from './cad/partui.js';
@@ -366,8 +366,18 @@ function refreshModel(model) {
     vertices += g.attributes.position.count;
     faces += mesh.userData.faces ? mesh.userData.faces.length : 0;
   }
+  // Drawings (DXF lines) and point clouds have no surfaces but still count.
+  let segments = 0, points = 0;
+  model.object.traverse((o) => {
+    if (!o.visible || !(o.userData.isWire || o.userData.isCloud)) return;
+    const g = o.geometry;
+    if (!g.boundingBox) g.computeBoundingBox();
+    if (!g.boundingBox.isEmpty()) box.union(g.boundingBox.clone().applyMatrix4(o.matrixWorld));
+    if (o.userData.isWire) segments += g.attributes.position.count / 2;
+    else points += g.attributes.position.count;
+  });
   model.box = box;
-  model.stats = { triangles, faces, vertices, bodies: model.parts.length };
+  model.stats = { triangles, faces, vertices, bodies: model.parts.length, segments, points };
 }
 
 function addModel(name, bytes, result) {
@@ -379,7 +389,7 @@ function addModel(name, bytes, result) {
   modelRoot.add(pivot);
   const model = { id: nextId++, name, format: result.info.format, info: result.info, object: pivot, bytes };
   refreshModel(model);
-  if (!model.parts.length) {
+  if (model.box.isEmpty()) {
     modelRoot.remove(pivot);
     throw Object.assign(new Error('No displayable surfaces.'), { i18n: 'err.noSurfaces' });
   }
@@ -474,7 +484,11 @@ function refreshModelList() {
 
     const sub = document.createElement('span');
     sub.className = 'sub';
-    sub.textContent = t('modelSub', { format: m.format, n: fmtInt(m.stats.triangles) });
+    sub.textContent = m.stats.triangles || (!m.stats.points && !m.stats.segments)
+      ? t('modelSub', { format: m.format, n: fmtInt(m.stats.triangles) })
+      : m.stats.points
+        ? t('modelSubPts', { format: m.format, n: fmtInt(m.stats.points) })
+        : t('modelSubLines', { format: m.format, n: fmtInt(m.stats.segments) });
 
     row.append(vis, nameEl, del, sub);
     row.addEventListener('click', () => setActive(m));
@@ -554,11 +568,13 @@ function showProps() {
     [t('fileSize'), fmtBytes(m.bytes)],
     [t('sizeX'), fmt(size.x) + ' mm'],
     [t('sizeY'), fmt(size.y) + ' mm'],
-    [t('sizeZ'), fmt(size.z) + ' mm'],
-    [t('bodies'), fmtInt(m.stats.bodies)]
+    [t('sizeZ'), fmt(size.z) + ' mm']
   );
+  if (m.stats.bodies) rows.push([t('bodies'), fmtInt(m.stats.bodies)]);
   if (m.stats.faces) rows.push([t('faces'), fmtInt(m.stats.faces)]);
-  rows.push([t('triangles'), fmtInt(m.stats.triangles)], [t('vertices'), fmtInt(m.stats.vertices)]);
+  if (m.stats.triangles) rows.push([t('triangles'), fmtInt(m.stats.triangles)], [t('vertices'), fmtInt(m.stats.vertices)]);
+  if (m.stats.segments) rows.push([t('segments'), fmtInt(m.stats.segments)]);
+  if (m.stats.points) rows.push([t('points'), fmtInt(m.stats.points)]);
   el.append(heading(m.name), dl(rows));
 
   if (selection) {
@@ -597,7 +613,7 @@ function showProps() {
       note(t('note.edit'))
     );
   } else if (m.info.note) {
-    el.append(note(t(m.info.note)));
+    el.append(note(t(m.info.note, m.info.noteVars)));
   }
 }
 
@@ -1176,7 +1192,21 @@ function busy(text) {
 // Let the "Loading…" overlay paint first; the timeout covers background tabs where rAF is paused.
 const nextPaint = () => new Promise((r) => { requestAnimationFrame(() => setTimeout(r, 0)); setTimeout(r, 120); });
 
-async function openBuffers(items) {
+// A proprietary file with an embedded thumbnail: show the picture and what to do instead.
+function showPreview(name, err) {
+  const url = URL.createObjectURL(new Blob([err.preview.bytes], { type: err.preview.mime }));
+  $('preview-title').textContent = t('prev.title', { name });
+  $('preview-text').textContent = errorText(err);
+  const img = $('preview-img');
+  img.onload = img.onerror = () => setTimeout(() => URL.revokeObjectURL(url), 1000);
+  img.src = url;
+  img.alt = t('prev.title', { name });
+  $('preview-modal').hidden = false;
+}
+
+// items: [{ name, getBuffer }]; resources: Map(lower-case name -> ArrayBuffer) of
+// companion files (materials, textures, .bin) that models may reference.
+async function openBuffers(items, resources = new Map()) {
   let loaded = 0;
   for (const { name, getBuffer } of items) {
     busy(t('loading', { name }));
@@ -1190,17 +1220,17 @@ async function openBuffers(items) {
         loaded += made.length;
         continue;
       }
-      const result = await loadModel(name, buffer);
+      const result = await loadModel(name, buffer, { resources });
       const model = addModel(name, buffer.byteLength, result);
-      // STEP files keep their bytes so they can be made editable as exact solids.
-      if (ext === 'step' || ext === 'stp') {
-        model.sourceBytes = buffer;
-        model.sourceKind = 'step';
-      }
+      // Exact geometry (STEP, BREP, FreeCAD) is kept so the model can become an exact part.
+      if (result.source) model.source = result.source;
       loaded++;
     } catch (err) {
-      console.error(err);
-      toast(t('err.open', { name }), errorText(err));
+      if (err?.preview) showPreview(name, err);
+      else {
+        console.error(err);
+        toast(t('err.open', { name }), errorText(err));
+      }
     }
   }
   busy(null);
@@ -1210,9 +1240,19 @@ async function openBuffers(items) {
   }
 }
 
-function openFiles(fileList) {
-  const items = [...fileList].map((f) => ({ name: f.name, getBuffer: () => f.arrayBuffer() }));
-  if (items.length) openBuffers(items);
+// Companion files (an .mtl, textures, a glTF .bin) are not opened on their own; models
+// opened at the same time can use them.
+async function openFiles(fileList) {
+  const files = [...fileList];
+  const isResource = (f) => RESOURCE_EXT.has(extensionOf(f.name));
+  const resources = new Map();
+  for (const f of files) {
+    if (isResource(f) || ['obj', 'gltf'].includes(extensionOf(f.name))) resources.set(f.name.toLowerCase(), await f.arrayBuffer());
+  }
+  let models = files.filter((f) => !isResource(f));
+  if (!models.length) models = files; // only images etc.: report them as unsupported
+  const items = models.map((f) => ({ name: f.name, getBuffer: () => f.arrayBuffer() }));
+  if (items.length) openBuffers(items, resources);
 }
 
 function openSample(name) {
@@ -1267,6 +1307,8 @@ window.addEventListener('drop', (e) => e.preventDefault());
 // =================================================================================================
 
 $('btn-open').addEventListener('click', () => $('file-input').click());
+$('preview-close').addEventListener('click', () => { $('preview-modal').hidden = true; $('preview-img').removeAttribute('src'); });
+$('file-input').accept = [...SUPPORTED, ...RESOURCE_EXT].map((e) => '.' + e).join(',') + ',.sldprt,.sldasm,.slddrw,.ipt,.iam,.idw,.par,.psm,.prt,.asm,.f3d,.skp,.catproduct,.catdrawing,.x_t,.x_b,.sat,.sab,.jt,.3dxml,.dwg';
 $('file-input').addEventListener('change', (e) => { openFiles(e.target.files); e.target.value = ''; });
 $('btn-fit').addEventListener('click', () => fit());
 for (const b of document.querySelectorAll('[data-view]')) b.addEventListener('click', () => fit(VIEWS[b.dataset.view]));

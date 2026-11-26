@@ -1,7 +1,7 @@
 {
   "name": "norma",
   "productName": "Norma",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "CAD viewer and modeller for CATPart, STEP, IGES and mesh files",
   "private": true,
   "type": "module",
@@ -9,15 +9,17 @@
   "scripts": {
     "start": "node server.js",
     "app": "electron .",
-    "test": "node test/features.test.mjs && node test/catpart.test.mjs && node test/mesh2solid.test.mjs",
-    "build": "electron-packager . \"Norma\" --platform=win32 --arch=x64 --out=dist --overwrite --asar --ignore=\"^/(samples|test|dist|\\.claude)($|/)\" --ignore=\"\\.(map|d\\.ts|md)$\" --ignore=\"^/node_modules/replicad-opencascadejs/dist/replicad_multi\" --ignore=\"^/node_modules/(@gltf-transform|@jscadui|@jridgewell|commander|convert-source-map|fast-xml-parser|fflate|magic-string)($|/)\""
+    "test": "node test/features.test.mjs && node test/formats.test.mjs && node test/fcstd.test.mjs && node test/catpart.test.mjs && node test/mesh2solid.test.mjs",
+    "build": "electron-packager . \"Norma\" --platform=win32 --arch=x64 --out=dist --overwrite --asar --ignore=\"^/(samples|test|dist|\\.claude)($|/)\" --ignore=\"\\.(map|d\\.ts|md)$\" --ignore=\"^/node_modules/replicad-opencascadejs/dist/replicad_multi\" --ignore=\"^/node_modules/web-ifc/(web-ifc-api-node\\.js|web-ifc-api-iife\\.js|web-ifc-mt\\.wasm|web-ifc-node\\.wasm)\" --ignore=\"^/node_modules/rhino3dm/rhino3dm\\.(min|module)\" --ignore=\"^/node_modules/(@gltf-transform|@jscadui|@jridgewell|commander|convert-source-map|fast-xml-parser|fflate|magic-string)($|/)\""
   },
   "dependencies": {
     "manifold-3d": "3.5.4",
     "occt-import-js": "0.0.23",
     "replicad": "1.1.0",
     "replicad-opencascadejs": "1.1.0",
-    "three": "0.170.0"
+    "rhino3dm": "8.35.0",
+    "three": "0.170.0",
+    "web-ifc": "0.0.78"
   },
   "devDependencies": {
     "@electron/packager": "^18.4.4",

@@ -287,10 +287,17 @@ async function sourceFor(model) {
     const r = await call('snapshot', { partId: model.part.id });
     return { id: r.id, mesh: !!model.part.body?.mesh };
   }
-  if (model.sourceBytes && model.sourceKind === 'step' && hasIdentityPose(model)) {
-    const bytes = model.sourceBytes.slice(0);
-    return call('addSource', { kind: 'step', bytes }, [bytes]);
+  // Exact geometry from STEP, BREP or FreeCAD files, unless the model was moved in the viewer.
+  const src = model.source;
+  if (src && hasIdentityPose(model)) {
+    if (src.kind === 'step') {
+      const bytes = src.bytes.slice(0);
+      return call('addSource', { kind: 'step', bytes }, [bytes]);
+    }
+    if (src.kind === 'brep') return call('addSource', { kind: 'brep', text: src.text });
+    if (src.kind === 'brepList') return call('addSource', { kind: 'brepList', items: src.items });
   }
+  if (!model.parts.length) throw Object.assign(new Error('no solid'), { i18n: 'k.noSolid' });
   const { positions, indices } = worldMesh(model);
   return call('addSource', { kind: 'mesh', positions, indices }, [positions.buffer, indices.buffer]);
 }

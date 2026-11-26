@@ -3,7 +3,8 @@ import opencascade from '/node_modules/replicad-opencascadejs/dist/replicad_sing
 import Manifold from '/node_modules/manifold-3d/manifold.js';
 import * as R from '/node_modules/replicad/dist/replicad.js';
 import { setKernel, evaluate, describe, isMesh, drawingViews } from './build.js';
-import { weldMesh, meshToBody } from './meshsolid.js';
+import { weldClosed, meshToBody } from './meshsolid.js';
+import { brepItemsToShape } from './brep.js';
 
 const WASM = '/node_modules/replicad-opencascadejs/dist/replicad_single.wasm';
 
@@ -50,15 +51,18 @@ const handlers = {
   // Register a base shape from a file or a mesh. Returns its source id.
   // kind 'step': exact solid from STEP bytes. kind 'mesh': closed triangle mesh
   // (positions + indices, world space) as a mesh body. id restores a saved source.
-  async addSource({ kind, bytes, positions, indices, id }) {
+  async addSource({ kind, bytes, positions, indices, id, text, items }) {
     await init();
     let shape;
     if (kind === 'mesh') {
-      const w = weldMesh(positions, indices);
-      if (w.openEdges || w.nonManifoldEdges) {
-        throw Object.assign(new Error('open mesh'), { i18n: 'k.meshOpen', vars: { status: w.openEdges + ' / ' + w.nonManifoldEdges } });
-      }
+      // Manifold reports meshes it cannot close (k.meshOpen) after its own merge pass.
+      const w = weldClosed(positions, indices);
       shape = meshToBody(mf, R, w.positions, w.triangles);
+    } else if (kind === 'brep') {
+      shape = R.deserializeShape(text);
+    } else if (kind === 'brepList') {
+      shape = brepItemsToShape(oc, R, items);
+      if (!shape) throw Object.assign(new Error('empty'), { i18n: 'k.emptyImport' });
     } else {
       shape = await importFile(kind, bytes);
       if (!shape || !shape.faces || !shape.faces.length) throw Object.assign(new Error('empty'), { i18n: 'k.emptyImport' });

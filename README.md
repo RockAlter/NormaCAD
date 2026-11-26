@@ -8,16 +8,24 @@ The interface is available in English, 日本語 and 中文.
 
 ## What it opens
 
-| Format | Extensions | How it is read |
-|---|---|---|
-| CATIA V5 part | `.CATPart`, `.cgr` | The tessellated display mesh stored inside the file (see below) |
-| STEP | `.step`, `.stp` | Exact geometry, tessellated by OpenCascade |
-| IGES | `.iges`, `.igs` | Exact geometry, tessellated by OpenCascade |
-| OpenCascade BREP | `.brep`, `.brp` | Exact geometry, tessellated by OpenCascade |
-| Meshes | `.stl`, `.obj`, `.ply`, `.3mf`, `.gltf`, `.glb` | Triangle mesh |
-| Norma project | `.norma` | Parts with their full feature history |
+| Format | Extensions | How it is read | Make editable as |
+|---|---|---|---|
+| CATIA V5 part | `.CATPart`, `.cgr` | The tessellated display mesh stored inside the file (see below) | Mesh solid |
+| FreeCAD document | `.FCStd` | Visible objects with FreeCAD's colours, placements, App::Part containers and assembly links | Exact solid |
+| STEP | `.step`, `.stp` | Exact geometry, tessellated by OpenCascade | Exact solid |
+| IGES | `.iges`, `.igs` | Exact geometry, tessellated by OpenCascade | Mesh solid |
+| OpenCascade BREP | `.brep`, `.brp` | Exact geometry, tessellated by OpenCascade | Exact solid |
+| Rhino | `.3dm` | Meshes, curves and points (via rhino3dm) | Mesh solid |
+| IFC (BIM) | `.ifc` | Building elements with colours (via web-ifc) | Mesh solid |
+| DXF | `.dxf` (ASCII) | Lines, arcs, circles, ellipses, polylines with bulges, splines, 3D faces, polyface meshes, blocks and dimension blocks; units from `$INSUNITS` | – |
+| Meshes and scenes | `.stl`, `.ast`, `.obj` (+`.mtl`), `.smf`, `.ply`, `.off`, `.3mf`, `.amf`, `.gltf`/`.glb` (+`.bin`, textures), `.dae`, `.kmz`, `.fbx`, `.3ds`, `.wrl`/`.vrml`, `.x3d`, `.vtk`/`.vtp`, `.usdz` | Triangle meshes | Mesh solid (closed meshes) |
+| Point clouds | `.xyz`, `.asc`, `.pts`, `.csv`, `.txt`, `.pcd`, point-only `.ply` | Points, with colours when present | – |
+| Archives | `.zip` | Opens every supported file inside, with their materials and textures | – |
+| Norma project | `.norma` | Parts with their full feature history | – |
 
-Other proprietary formats (SolidWorks, NX, Creo, Inventor, Parasolid, JT, …) are not supported; export them to STEP first.
+Companion files (`.mtl`, glTF `.bin`, textures) are picked up when opened together with the model or packed in the same zip.
+
+**Proprietary formats** — SolidWorks (`.sldprt`, `.sldasm`, `.slddrw`), Inventor (`.ipt`, `.iam`, `.idw`), Solid Edge (`.par`, `.psm`, `.asm`), NX / Creo (`.prt`, including Creo's `.prt.N`), Fusion (`.f3d`), SketchUp (`.skp`), CATProduct and CATDrawing cannot be read. When such a file contains a preview picture (most do), Norma shows it, with a note to export STEP. Parasolid, ACIS, JT and 3DXML are not supported yet. DWG is closed; save as DXF or use the free ODA File Converter.
 
 ## View mode
 
@@ -107,7 +115,7 @@ Tests:
 npm test
 ```
 
-That runs the CATPart reader check (on files in `samples/`) and the modelling-kernel tests. To check the reader, or mesh-part editing, against your own file:
+That runs the modelling-kernel tests, the format-parser tests, the FreeCAD reader on files in `samples/formats/`, and the CATPart reader check on files in `samples/`. To make the format test files, run `test/fc_export.py` with FreeCAD's `freecadcmd` (set `NORMA_OUT` to `samples/formats`) and then `node test/make-format-samples.mjs`. To check the reader, or mesh-part editing, against your own file:
 
 ```bash
 node test/catpart.test.mjs path/to/part.CATPart
@@ -126,7 +134,11 @@ node test/mesh2solid.test.mjs path/to/part.CATPart
 | `src/i18n.js`, `src/i18n-cad.js` | English, Japanese and Chinese strings |
 | `src/meshkit.js` | Mesh, material and edge helpers |
 | `src/loaders/catpart.js` | CATIA V5 reader |
-| `src/loaders/index.js` | Format dispatch (OpenCascade and three.js loaders) |
+| `src/loaders/index.js` | Format dispatch (OpenCascade, three.js, web-ifc and rhino3dm loaders) |
+| `src/loaders/fcstd.js` | FreeCAD document reader (visibility, placements, links, colours) |
+| `src/loaders/dxf.js` | DXF reader |
+| `src/loaders/simple.js` | OFF, X3D, point clouds, and preview images in proprietary files |
+| `src/cad/brep.js` | Exact shapes from BREP text |
 | `src/cad/build.js` | Feature-history evaluation (runs in the kernel worker and in Node tests) |
 | `src/cad/worker.js`, `src/cad/kernel.js` | Modelling kernel in a Web Worker, and its client |
 | `src/cad/partui.js`, `src/cad/features.js` | Feature tree, dialogs, picking and sketcher |
@@ -142,6 +154,8 @@ node test/mesh2solid.test.mjs path/to/part.CATPart
 - [occt-import-js](https://github.com/kovacsv/occt-import-js) (LGPL-2.1), built on OpenCascade — STEP, IGES and BREP import
 - [replicad](https://replicad.xyz) (MIT) with [replicad-opencascadejs](https://github.com/sgenoud/replicad) (LGPL-2.1, OpenCascade) — solid modelling
 - [Manifold](https://github.com/elalish/manifold) (Apache-2.0) — booleans on mesh solids
+- [web-ifc](https://github.com/ThatOpen/engine_web-ifc) (MPL-2.0) — IFC import
+- [rhino3dm](https://github.com/mcneel/rhino3dm) (MIT) — Rhino 3DM import
 - [Electron](https://www.electronjs.org) (MIT) — desktop packaging
 
 ## Notice
